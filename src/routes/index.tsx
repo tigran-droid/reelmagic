@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { MobileFrame } from "@/components/MobileFrame";
-import { Search, Bell, Play, Flame, TrendingUp } from "lucide-react";
+import { Search, Bell, Play } from "lucide-react";
 import glam from "@/assets/reel-glam.jpg";
 import anime from "@/assets/reel-anime.jpg";
 import vhs from "@/assets/reel-vhs.jpg";
@@ -16,14 +16,7 @@ export const Route = createFileRoute("/")({
   component: Categories,
 });
 
-const categories = [
-  { label: "Trending", icon: Flame },
-  { label: "Glam" },
-  { label: "Cinematic" },
-  { label: "Anime" },
-  { label: "Retro" },
-  { label: "Cyber" },
-];
+const categories = ["Trending", "Glam", "Cinematic", "Anime", "Retro", "Cyber"];
 
 const featured = {
   video: glam,
@@ -33,82 +26,103 @@ const featured = {
   uses: "12.4k",
 };
 
-const sections = [
-  {
-    title: "Trending now",
-    subtitle: "Most generated this week",
-    items: [
-      { video: anime, title: "Cyber City", tag: "Anime AI", duration: "0:20", uses: "8.1k" },
-      { video: cinema, title: "Golden Hour", tag: "Cinematic", duration: "0:15", uses: "5.4k" },
-      { video: vhs, title: "VHS Memory", tag: "Retro", duration: "0:12", uses: "3.2k" },
-    ],
-  },
-  {
-    title: "Cinematic",
-    subtitle: "Film-grade looks",
-    items: [
-      { video: cinema, title: "Golden Hour", tag: "16mm Film", duration: "0:18", uses: "4.7k" },
-      { video: glam, title: "Neon Bloom", tag: "Night City", duration: "0:15", uses: "9.3k" },
-      { video: vhs, title: "Polaroid", tag: "Memory", duration: "0:10", uses: "2.1k" },
-    ],
-  },
-  {
-    title: "Retro vibe",
-    subtitle: "Throwback aesthetics",
-    items: [
-      { video: vhs, title: "90s Camcorder", tag: "VHS", duration: "0:14", uses: "6.8k" },
-      { video: glam, title: "Disco Night", tag: "Glam", duration: "0:16", uses: "4.0k" },
-      { video: anime, title: "Tokyo 88", tag: "Anime", duration: "0:13", uses: "3.5k" },
-    ],
-  },
+type Card = {
+  video: string;
+  title: string;
+  tag: string;
+  tagColor: string;
+  duration?: string;
+  uses?: string;
+  ratio: string;
+};
+
+const colA: Card[] = [
+  { video: anime, title: "Cyber City", tag: "Anime AI", tagColor: "text-brand", duration: "0:20", uses: "8.1k", ratio: "aspect-[9/16]" },
+  { video: vhs, title: "Glitch Pulse", tag: "Retro", tagColor: "text-accent", duration: "0:10", uses: "2.4k", ratio: "aspect-square" },
+  { video: glam, title: "Neon Bloom", tag: "Glam", tagColor: "text-brand", duration: "0:14", uses: "6.2k", ratio: "aspect-[9/14]" },
 ];
+
+const colB: Card[] = [
+  { video: cinema, title: "Golden Hour", tag: "Cinematic", tagColor: "text-accent", duration: "0:12", uses: "5.4k", ratio: "aspect-[9/15]" },
+  { video: vhs, title: "Synthwave", tag: "Retro", tagColor: "text-accent", duration: "0:15", uses: "3.1k", ratio: "aspect-[9/16]" },
+  { video: anime, title: "Tokyo 88", tag: "Anime", tagColor: "text-brand", duration: "0:13", uses: "3.5k", ratio: "aspect-square" },
+];
+
+function TemplateCard({ card }: { card: Card }) {
+  return (
+    <button className="block w-full text-left">
+      <div className={`relative ${card.ratio} rounded-[2rem] overflow-hidden bg-card border border-border/60 group`}>
+        <video
+          src=""
+          poster={card.video}
+          muted
+          loop
+          playsInline
+          preload="none"
+          className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent" />
+        {card.duration && (
+          <div className="absolute top-3 right-3 px-2 py-1 bg-black/60 backdrop-blur-md rounded-lg text-[9px] font-bold text-white tabular-nums">
+            {card.duration}
+          </div>
+        )}
+        <div className="absolute bottom-3.5 left-3.5 right-3.5">
+          <span className={`text-[8px] font-black uppercase tracking-tighter ${card.tagColor}`}>{card.tag}</span>
+          <h4 className="text-sm font-bold text-white leading-tight">{card.title}</h4>
+          {card.uses && <p className="text-[9px] text-white/60 font-medium mt-0.5">{card.uses} uses</p>}
+        </div>
+      </div>
+    </button>
+  );
+}
 
 function Categories() {
   return (
     <MobileFrame>
-      <header className="sticky top-0 z-20 backdrop-blur-xl bg-background/70 border-b border-border/50">
-        <div className="pt-12 px-5 pb-3 flex items-center justify-between">
+      {/* Header */}
+      <header className="sticky top-0 z-30 bg-background/80 backdrop-blur-xl">
+        <div className="pt-12 pb-3 px-6 flex justify-between items-center">
           <div>
-            <p className="text-[10px] uppercase tracking-[0.24em] text-muted-foreground/80">Explore</p>
-            <h1 className="text-2xl font-semibold tracking-tight leading-tight">Templates</h1>
+            <span className="text-[10px] font-bold tracking-[0.3em] text-muted-foreground uppercase block mb-0.5">
+              Explore
+            </span>
+            <h1 className="text-3xl font-extrabold tracking-tight">Templates</h1>
           </div>
-          <div className="flex items-center gap-2">
-            <button className="size-10 grid place-items-center rounded-full bg-secondary/60 border border-border/60">
-              <Search className="size-4" />
+          <div className="flex gap-2.5">
+            <button className="size-10 rounded-full bg-secondary/60 grid place-items-center border border-border/60">
+              <Search className="size-4" strokeWidth={2.5} />
             </button>
-            <button className="size-10 grid place-items-center rounded-full bg-secondary/60 border border-border/60 relative">
-              <Bell className="size-4" />
-              <span className="absolute top-2 right-2 size-1.5 rounded-full bg-brand" />
+            <button className="size-10 rounded-full bg-secondary/60 grid place-items-center border border-border/60 relative">
+              <Bell className="size-4" strokeWidth={2.5} />
+              <span className="absolute top-2 right-2 size-2 rounded-full bg-brand ring-2 ring-background" />
             </button>
-          </div>
-        </div>
-
-        <div className="px-5 pb-3">
-          <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
-            {categories.map((c, i) => {
-              const Icon = c.icon;
-              const active = i === 0;
-              return (
-                <button
-                  key={c.label}
-                  className={`px-3.5 py-1.5 rounded-full text-[13px] font-medium whitespace-nowrap inline-flex items-center gap-1.5 transition-colors border ${
-                    active
-                      ? "bg-foreground text-background border-foreground"
-                      : "bg-transparent text-muted-foreground border-border/60 hover:text-foreground"
-                  }`}
-                >
-                  {Icon && <Icon className="size-3.5" />}
-                  {c.label}
-                </button>
-              );
-            })}
           </div>
         </div>
       </header>
 
-      {/* Featured hero */}
-      <section className="px-5 pt-5">
-        <button className="relative w-full aspect-[16/10] rounded-3xl overflow-hidden text-left ring-1 ring-white/10 shadow-[0_20px_60px_-20px_hsl(0_0%_0%/0.6)]">
+      {/* Categories */}
+      <div className="flex gap-2 overflow-x-auto px-6 py-5 no-scrollbar">
+        {categories.map((c, i) => {
+          const active = i === 0;
+          return (
+            <button
+              key={c}
+              className={`px-5 py-2 rounded-full font-bold text-xs whitespace-nowrap transition-colors ${
+                active
+                  ? "bg-brand text-brand-foreground shadow-[0_0_20px_color-mix(in_oklab,var(--brand)_40%,transparent)]"
+                  : "bg-secondary/60 text-muted-foreground border border-border/60"
+              }`}
+            >
+              {c}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Featured */}
+      <section className="px-6 mb-10">
+        <button className="relative w-full aspect-[1.6/1] rounded-[2.5rem] overflow-hidden bg-card ring-1 ring-border shadow-2xl group text-left">
           <video
             src=""
             poster={featured.video}
@@ -116,74 +130,54 @@ function Categories() {
             muted
             loop
             playsInline
-            className="absolute inset-0 w-full h-full object-cover"
+            className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-black/30" />
-          <div className="absolute top-3 left-3 inline-flex items-center gap-1 px-2 py-1 rounded-full bg-black/50 backdrop-blur-md text-[10px] font-semibold text-white/90 uppercase tracking-wider border border-white/10">
-            <TrendingUp className="size-3 text-brand" /> Featured
+          <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent" />
+
+          <div className="absolute top-5 left-5">
+            <div className="px-3 py-1 bg-accent text-accent-foreground text-[9px] font-black uppercase tracking-widest rounded-full flex items-center gap-1.5 shadow-lg">
+              <span className="size-1.5 bg-accent-foreground rounded-full" /> Featured
+            </div>
           </div>
-          <div className="absolute top-3 right-3 px-2 py-1 rounded-md bg-black/60 backdrop-blur-md text-[10px] font-semibold text-white tabular-nums">
+
+          <div className="absolute top-5 right-5 px-2 py-1 bg-black/50 backdrop-blur-md rounded-lg border border-white/10 text-[10px] font-bold text-white tabular-nums">
             {featured.duration}
           </div>
-          <div className="absolute bottom-4 left-4 right-4 flex items-end justify-between gap-3">
+
+          <div className="absolute bottom-6 left-6 right-6 flex justify-between items-end gap-3">
             <div>
-              <p className="text-[10px] uppercase tracking-[0.2em] text-white/60 mb-1">{featured.tag}</p>
-              <h2 className="text-2xl font-semibold text-white leading-tight">{featured.title}</h2>
-              <p className="text-[11px] text-white/70 mt-1">{featured.uses} creators using</p>
+              <span className="text-brand text-[10px] font-black uppercase tracking-widest">{featured.tag}</span>
+              <h2 className="text-2xl font-extrabold text-white leading-tight">{featured.title}</h2>
+              <p className="text-white/60 text-[10px] font-medium mt-0.5">{featured.uses} creators using</p>
             </div>
-            <div className="size-12 grid place-items-center rounded-full bg-brand text-brand-foreground shadow-lg shadow-brand/30">
-              <Play className="size-5 fill-current" />
-            </div>
+            <button className="size-14 bg-brand rounded-2xl grid place-items-center shadow-[0_8px_24px_color-mix(in_oklab,var(--brand)_50%,transparent)] rotate-3 hover:rotate-0 transition-transform">
+              <Play className="size-6 fill-brand-foreground text-brand-foreground" />
+            </button>
           </div>
         </button>
       </section>
 
-      <div className="pt-8 pb-4 space-y-8">
-        {sections.map((section) => (
-          <section key={section.title}>
-            <div className="flex items-end justify-between mb-3 px-5">
-              <div>
-                <h2 className="text-base font-semibold tracking-tight">{section.title}</h2>
-                <p className="text-[11px] text-muted-foreground">{section.subtitle}</p>
-              </div>
-              <button className="text-[11px] text-muted-foreground font-medium hover:text-foreground transition-colors">
-                See all →
-              </button>
-            </div>
-            <div className="flex gap-3 overflow-x-auto no-scrollbar px-5 pb-1">
-              {section.items.map((item, i) => (
-                <button key={i} className="relative group text-left shrink-0 w-[42vw] max-w-[180px]">
-                  <div className="relative w-full aspect-[9/14] rounded-2xl overflow-hidden bg-card ring-1 ring-white/10">
-                    <video
-                      src=""
-                      poster={item.video}
-                      muted
-                      loop
-                      playsInline
-                      preload="none"
-                      className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/0 to-black/20" />
+      {/* Staggered grid */}
+      <section className="px-6 pb-8">
+        <div className="flex justify-between items-end mb-5">
+          <div>
+            <h3 className="text-xl font-extrabold tracking-tight">Trending now</h3>
+            <p className="text-[11px] text-muted-foreground mt-0.5">Most generated this week</p>
+          </div>
+          <button className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest pb-1 hover:text-foreground transition-colors">
+            See all →
+          </button>
+        </div>
 
-                    <div className="absolute top-2 right-2 px-1.5 py-0.5 rounded-md bg-black/60 backdrop-blur-md text-[10px] font-semibold text-white tabular-nums">
-                      {item.duration}
-                    </div>
-                    <div className="absolute top-2 left-2 size-7 grid place-items-center rounded-full bg-white/15 backdrop-blur-md border border-white/20 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Play className="size-3 fill-white text-white" />
-                    </div>
-
-                    <div className="absolute bottom-2.5 left-2.5 right-2.5">
-                      <p className="text-[9px] uppercase tracking-[0.18em] text-white/60 mb-0.5">{item.tag}</p>
-                      <p className="text-sm font-semibold text-white leading-tight truncate">{item.title}</p>
-                      <p className="text-[10px] text-white/60 mt-0.5">{item.uses} uses</p>
-                    </div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </section>
-        ))}
-      </div>
+        <div className="flex gap-3">
+          <div className="flex-1 flex flex-col gap-3">
+            {colA.map((c, i) => <TemplateCard key={i} card={c} />)}
+          </div>
+          <div className="flex-1 flex flex-col gap-3 pt-8">
+            {colB.map((c, i) => <TemplateCard key={i} card={c} />)}
+          </div>
+        </div>
+      </section>
     </MobileFrame>
   );
 }
