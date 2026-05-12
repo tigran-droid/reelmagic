@@ -48,23 +48,6 @@ const colB: Card[] = [
   { video: anime, title: "Tokyo 88", tag: "Anime", tagColor: "text-brand", duration: "0:13", uses: "3.5k", ratio: "aspect-square" },
 ];
 
-type CategoryTile = {
-  name: string;
-  count: string;
-  video: string;
-  span: string;
-  position: string;
-  accent: string;
-};
-
-const categoryTiles: CategoryTile[] = [
-  { name: "Glam",      count: "1.2k reels", video: glam,   span: "col-span-2 aspect-[16/11]", position: "object-[50%_30%]", accent: "from-pink-500/30" },
-  { name: "Cinematic", count: "860 reels",  video: cinema, span: "col-span-1 aspect-[3/4]",   position: "object-[70%_50%]", accent: "from-amber-500/30" },
-  { name: "Anime",     count: "940 reels",  video: anime,  span: "col-span-1 aspect-[3/4]",   position: "object-[30%_40%]", accent: "from-violet-500/30" },
-  { name: "Retro",     count: "510 reels",  video: vhs,    span: "col-span-1 aspect-square",  position: "object-[50%_70%]", accent: "from-cyan-500/30" },
-  { name: "Cyber",     count: "720 reels",  video: anime,  span: "col-span-1 aspect-square",  position: "object-[80%_20%]", accent: "from-emerald-500/30" },
-  { name: "Portrait",  count: "1.5k reels", video: glam,   span: "col-span-2 aspect-[16/9]",  position: "object-[50%_80%]", accent: "from-rose-500/30" },
-];
 
 function TemplateCard({ card }: { card: Card }) {
   return (
