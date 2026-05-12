@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { MobileFrame } from "@/components/MobileFrame";
-import { Search, Bell, Play, ArrowUpRight } from "lucide-react";
+import { Search, Bell, Play } from "lucide-react";
 import glam from "@/assets/reel-glam.jpg";
 import anime from "@/assets/reel-anime.jpg";
 import vhs from "@/assets/reel-vhs.jpg";
