@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { MobileFrame } from "@/components/MobileFrame";
-import { Search, Bell, Play } from "lucide-react";
+import { Search, Bell, Play, ArrowUpRight } from "lucide-react";
 import glam from "@/assets/reel-glam.jpg";
 import anime from "@/assets/reel-anime.jpg";
 import vhs from "@/assets/reel-vhs.jpg";
@@ -46,6 +46,24 @@ const colB: Card[] = [
   { video: cinema, title: "Golden Hour", tag: "Cinematic", tagColor: "text-accent", duration: "0:12", uses: "5.4k", ratio: "aspect-[9/15]" },
   { video: vhs, title: "Synthwave", tag: "Retro", tagColor: "text-accent", duration: "0:15", uses: "3.1k", ratio: "aspect-[9/16]" },
   { video: anime, title: "Tokyo 88", tag: "Anime", tagColor: "text-brand", duration: "0:13", uses: "3.5k", ratio: "aspect-square" },
+];
+
+type CategoryTile = {
+  name: string;
+  count: string;
+  video: string;
+  span: string;
+  position: string;
+  accent: string;
+};
+
+const categoryTiles: CategoryTile[] = [
+  { name: "Glam",      count: "1.2k reels", video: glam,   span: "col-span-2 aspect-[16/11]", position: "object-[50%_30%]", accent: "from-pink-500/30" },
+  { name: "Cinematic", count: "860 reels",  video: cinema, span: "col-span-1 aspect-[3/4]",   position: "object-[70%_50%]", accent: "from-amber-500/30" },
+  { name: "Anime",     count: "940 reels",  video: anime,  span: "col-span-1 aspect-[3/4]",   position: "object-[30%_40%]", accent: "from-violet-500/30" },
+  { name: "Retro",     count: "510 reels",  video: vhs,    span: "col-span-1 aspect-square",  position: "object-[50%_70%]", accent: "from-cyan-500/30" },
+  { name: "Cyber",     count: "720 reels",  video: anime,  span: "col-span-1 aspect-square",  position: "object-[80%_20%]", accent: "from-emerald-500/30" },
+  { name: "Portrait",  count: "1.5k reels", video: glam,   span: "col-span-2 aspect-[16/9]",  position: "object-[50%_80%]", accent: "from-rose-500/30" },
 ];
 
 function TemplateCard({ card }: { card: Card }) {
@@ -176,6 +194,45 @@ function Categories() {
           <div className="flex-1 flex flex-col gap-3 pt-8">
             {colB.map((c, i) => <TemplateCard key={i} card={c} />)}
           </div>
+        </div>
+      </section>
+
+      {/* Browse by category — bento with varied object positioning */}
+      <section className="px-6 pb-10">
+        <div className="flex justify-between items-end mb-5">
+          <div>
+            <h3 className="text-xl font-extrabold tracking-tight">Browse categories</h3>
+            <p className="text-[11px] text-muted-foreground mt-0.5">Curated styles for every mood</p>
+          </div>
+          <button className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest pb-1 hover:text-foreground transition-colors">
+            All →
+          </button>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          {categoryTiles.map((t) => (
+            <button
+              key={t.name}
+              className={`relative ${t.span} rounded-[1.75rem] overflow-hidden bg-card border border-border/60 group text-left`}
+            >
+              <img
+                src={t.video}
+                alt={t.name}
+                className={`absolute inset-0 w-full h-full object-cover ${t.position} transition-transform duration-500 group-hover:scale-110`}
+              />
+              <div className={`absolute inset-0 bg-gradient-to-tr ${t.accent} via-transparent to-transparent`} />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-transparent" />
+
+              <div className="absolute top-3 right-3 size-7 rounded-full bg-white/15 backdrop-blur-md grid place-items-center border border-white/20 opacity-0 group-hover:opacity-100 transition-opacity">
+                <ArrowUpRight className="size-3.5 text-white" strokeWidth={2.5} />
+              </div>
+
+              <div className="absolute bottom-3 left-3.5 right-3.5">
+                <h4 className="text-base font-extrabold text-white leading-tight tracking-tight">{t.name}</h4>
+                <p className="text-[10px] text-white/70 font-medium mt-0.5">{t.count}</p>
+              </div>
+            </button>
+          ))}
         </div>
       </section>
     </MobileFrame>
