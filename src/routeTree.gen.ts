@@ -10,12 +10,18 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as ToolsRouteImport } from './routes/tools'
+import { Route as PhotoshopRouteImport } from './routes/photoshop'
 import { Route as FeedRouteImport } from './routes/feed'
 import { Route as IndexRouteImport } from './routes/index'
 
 const ToolsRoute = ToolsRouteImport.update({
   id: '/tools',
   path: '/tools',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PhotoshopRoute = PhotoshopRouteImport.update({
+  id: '/photoshop',
+  path: '/photoshop',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FeedRoute = FeedRouteImport.update({
@@ -32,30 +38,34 @@ const IndexRoute = IndexRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/feed': typeof FeedRoute
+  '/photoshop': typeof PhotoshopRoute
   '/tools': typeof ToolsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/feed': typeof FeedRoute
+  '/photoshop': typeof PhotoshopRoute
   '/tools': typeof ToolsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/feed': typeof FeedRoute
+  '/photoshop': typeof PhotoshopRoute
   '/tools': typeof ToolsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/feed' | '/tools'
+  fullPaths: '/' | '/feed' | '/photoshop' | '/tools'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/feed' | '/tools'
-  id: '__root__' | '/' | '/feed' | '/tools'
+  to: '/' | '/feed' | '/photoshop' | '/tools'
+  id: '__root__' | '/' | '/feed' | '/photoshop' | '/tools'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   FeedRoute: typeof FeedRoute
+  PhotoshopRoute: typeof PhotoshopRoute
   ToolsRoute: typeof ToolsRoute
 }
 
@@ -66,6 +76,13 @@ declare module '@tanstack/react-router' {
       path: '/tools'
       fullPath: '/tools'
       preLoaderRoute: typeof ToolsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/photoshop': {
+      id: '/photoshop'
+      path: '/photoshop'
+      fullPath: '/photoshop'
+      preLoaderRoute: typeof PhotoshopRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/feed': {
@@ -88,6 +105,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   FeedRoute: FeedRoute,
+  PhotoshopRoute: PhotoshopRoute,
   ToolsRoute: ToolsRoute,
 }
 export const routeTree = rootRouteImport
