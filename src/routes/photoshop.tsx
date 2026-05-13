@@ -17,7 +17,7 @@ export const Route = createFileRoute("/photoshop")({
   component: Photoshop,
 });
 
-const categories = ["Trending", "Portrait", "Color Pop", "B&W", "Retouch", "Sky"];
+const categories = ["Trending", "Glam", "Nature", "Street", "Portrait", "B&W"];
 
 const featured = {
   img: glam,
@@ -27,49 +27,25 @@ const featured = {
   uses: "9.4k",
 };
 
-type Card = {
-  img: string;
-  title: string;
-  tag: string;
-  tagColor: string;
-  uses?: string;
-  ratio: string;
-};
-
-const colA: Card[] = [
-  { img: anime, title: "Pop Anime", tag: "Stylize", tagColor: "text-brand", uses: "4.2k", ratio: "aspect-[9/16]" },
-  { img: vhs, title: "Retro Grain", tag: "Vintage", tagColor: "text-accent", uses: "2.8k", ratio: "aspect-square" },
-  { img: glam, title: "Studio Skin", tag: "Retouch", tagColor: "text-brand", uses: "5.7k", ratio: "aspect-[9/14]" },
+const everyday = [
+  { img: glam, name: "Sunlight Glow" },
+  { img: cinema, name: "Grainy Film" },
+  { img: anime, name: "Urban Soft" },
+  { img: vhs, name: "Warm Pastel" },
 ];
 
-const colB: Card[] = [
-  { img: cinema, title: "Golden Film", tag: "Cinematic", tagColor: "text-accent", uses: "6.1k", ratio: "aspect-[9/15]" },
-  { img: vhs, title: "Mono Drama", tag: "B&W", tagColor: "text-accent", uses: "1.9k", ratio: "aspect-[9/16]" },
-  { img: anime, title: "Color Pop", tag: "Vivid", tagColor: "text-brand", uses: "3.5k", ratio: "aspect-square" },
+const portraits = [
+  { img: glam, name: "B&W Class", active: true },
+  { img: cinema, name: "Deep Focus" },
+  { img: anime, name: "Vivid Skin" },
+  { img: vhs, name: "Studio" },
 ];
 
-function PresetCard({ card }: { card: Card }) {
-  return (
-    <button className="block w-full text-left">
-      <div className={`relative ${card.ratio} rounded-[2rem] overflow-hidden bg-card border border-border group`}>
-        <img
-          src={card.img}
-          alt={card.title}
-          className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent" />
-        <div className="absolute top-3 right-3 px-2 py-1 bg-black/60 backdrop-blur-md rounded-lg text-[9px] font-bold text-white">
-          AI
-        </div>
-        <div className="absolute bottom-3.5 left-3.5 right-3.5">
-          <span className={`text-[8px] font-black uppercase tracking-tighter ${card.tagColor}`}>{card.tag}</span>
-          <h4 className="text-sm font-bold text-white leading-tight">{card.title}</h4>
-          {card.uses && <p className="text-[9px] text-white/70 font-medium mt-0.5">{card.uses} uses</p>}
-        </div>
-      </div>
-    </button>
-  );
-}
+const travel = [
+  { img: cinema, name: "Alpine" },
+  { img: vhs, name: "Mist" },
+  { img: anime, name: "Coast" },
+];
 
 function Photoshop() {
   const fileRef = useRef<HTMLInputElement>(null);
