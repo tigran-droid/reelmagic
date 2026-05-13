@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { MobileFrame } from "@/components/MobileFrame";
-import { Aperture, ChevronRight, Sparkles } from "lucide-react";
+import { Aperture, ChevronRight, Sparkles, SlidersHorizontal } from "lucide-react";
 import birthday from "@/assets/photo-birthday.jpg";
 import wedding from "@/assets/photo-wedding.jpg";
 import travel from "@/assets/photo-travel.jpg";
@@ -82,11 +82,19 @@ const sections = [
 function Photoshop() {
   return (
     <MobileFrame>
+      {/* Header */}
+      <header className="px-5 pt-8 pb-2 flex items-center justify-between">
+        <h1 className="text-2xl font-extrabold tracking-tight">Photoshop</h1>
+        <button className="size-9 rounded-full bg-secondary border border-border flex items-center justify-center">
+          <SlidersHorizontal className="size-4" strokeWidth={2.5} />
+        </button>
+      </header>
+
       {/* Featured top row */}
-      <section className="px-4 pt-6 pb-5">
+      <section className="px-4 pt-3 pb-5">
         <div className="flex gap-3 overflow-x-auto no-scrollbar snap-x">
           {featured.map((f, i) => (
-            <button key={i} className="flex-none w-56 aspect-[5/4] rounded-2xl overflow-hidden relative bg-secondary snap-start ring-1 ring-border">
+            <button key={i} className="flex-none w-56 aspect-[5/4] rounded-lg overflow-hidden relative bg-secondary snap-start ring-1 ring-border">
               <img src={f.img} alt={f.title} loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
               <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/15 to-transparent" />
               <div className="absolute top-3 left-3">
@@ -121,7 +129,7 @@ function Photoshop() {
             </div>
             <div className="flex gap-3 px-5 overflow-x-auto no-scrollbar snap-x">
               {s.items.map((p, i) => (
-                <button key={i} className="flex-none w-44 aspect-[5/6] snap-start rounded-2xl overflow-hidden relative bg-secondary ring-1 ring-border">
+                <button key={i} className="flex-none w-32 aspect-[4/5] snap-start rounded-lg overflow-hidden relative bg-secondary ring-1 ring-border">
                   <img src={p.img} alt={p.name} loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/10 to-transparent" />
                   <div className="absolute bottom-3 left-3 right-3 text-left">
