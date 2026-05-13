@@ -24,28 +24,28 @@ const features = [
 function Tools() {
   return (
     <MobileFrame>
-      <div className="px-4 pt-4 pb-6">
-        <h1 className="text-center text-lg font-semibold mb-5">Features</h1>
-        <div className="grid grid-cols-2 gap-3">
+      <div className="px-4 pt-3 pb-6 bg-black min-h-full">
+        <h1 className="text-center text-[17px] font-semibold text-white mb-5">Features</h1>
+        <div className="grid grid-cols-2 gap-x-3 gap-y-6">
           {features.map(({ img, title, subtitle, icon: Icon }) => (
             <button
               key={title}
               className="flex flex-col text-left active:scale-[0.98] transition-transform"
             >
-              <div className="relative aspect-[4/5] w-full overflow-hidden rounded-2xl bg-secondary">
+              <div className="relative aspect-square w-full overflow-hidden rounded-2xl bg-neutral-900">
                 <img
                   src={img}
                   alt={title}
                   loading="lazy"
                   className="absolute inset-0 size-full object-cover"
                 />
-                <div className="absolute bottom-2 left-2 size-9 rounded-full bg-black/55 backdrop-blur-sm grid place-items-center">
-                  <Icon className="size-4 text-white" strokeWidth={2.2} />
+                <div className="absolute bottom-2 left-2 size-8 rounded-full bg-black/60 backdrop-blur-sm grid place-items-center">
+                  <Icon className="size-4 text-white" strokeWidth={2.4} />
                 </div>
               </div>
-              <div className="pt-2 px-0.5">
-                <div className="text-[15px] font-semibold leading-tight">{title}</div>
-                <div className="text-xs text-muted-foreground mt-0.5 leading-snug">{subtitle}</div>
+              <div className="pt-2.5 px-0.5">
+                <div className="text-[17px] font-bold text-white leading-tight">{title}</div>
+                <div className="text-[13px] text-neutral-400 mt-1 leading-snug">{subtitle}</div>
               </div>
             </button>
           ))}
