@@ -36,7 +36,7 @@
   --color-ring: var(--ring);
   --color-tabbar: var(--tabbar);
 
-  --font-sans: 'Inter', sans-serif;
+  --font-sans: 'Space Grotesk', 'Inter', sans-serif;
 }
 
 :root {
