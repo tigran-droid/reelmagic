@@ -1,12 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { MobileFrame } from "@/components/MobileFrame";
-import { Search, Bell, Sparkles, Wand2, Sun, Eraser, Palette, Crop, Layers, ImagePlus } from "lucide-react";
+import { Search, Bell, Wand2, ImagePlus } from "lucide-react";
 import { useRef, useState } from "react";
 import glam from "@/assets/reel-glam.jpg";
 import anime from "@/assets/reel-anime.jpg";
 import vhs from "@/assets/reel-vhs.jpg";
 import cinema from "@/assets/reel-cinema.jpg";
-import avatar from "@/assets/avatar.jpg";
 
 export const Route = createFileRoute("/photoshop")({
   head: () => ({
@@ -20,28 +19,61 @@ export const Route = createFileRoute("/photoshop")({
 
 const categories = ["Trending", "Portrait", "Color Pop", "B&W", "Retouch", "Sky"];
 
-const tools = [
-  { icon: Sparkles, label: "Enhance" },
-  { icon: Sun, label: "Light" },
-  { icon: Palette, label: "Color" },
-  { icon: Eraser, label: "Cleanup" },
-  { icon: Crop, label: "Crop" },
-  { icon: Layers, label: "Layers" },
+const featured = {
+  img: glam,
+  title: "Velvet Glow",
+  tag: "Portrait · New",
+  edits: "0 edits",
+  uses: "9.4k",
+};
+
+type Card = {
+  img: string;
+  title: string;
+  tag: string;
+  tagColor: string;
+  uses?: string;
+  ratio: string;
+};
+
+const colA: Card[] = [
+  { img: anime, title: "Pop Anime", tag: "Stylize", tagColor: "text-brand", uses: "4.2k", ratio: "aspect-[9/16]" },
+  { img: vhs, title: "Retro Grain", tag: "Vintage", tagColor: "text-accent", uses: "2.8k", ratio: "aspect-square" },
+  { img: glam, title: "Studio Skin", tag: "Retouch", tagColor: "text-brand", uses: "5.7k", ratio: "aspect-[9/14]" },
 ];
 
-const presets = [
-  { img: glam, name: "Velvet Glow", tag: "Portrait", uses: "9.4k", ratio: "aspect-[9/16]" },
-  { img: cinema, name: "Golden Film", tag: "Cinematic", uses: "6.1k", ratio: "aspect-square" },
-  { img: anime, name: "Pop Anime", tag: "Stylize", uses: "4.2k", ratio: "aspect-[9/14]" },
-  { img: vhs, name: "Retro Grain", tag: "Vintage", uses: "2.8k", ratio: "aspect-[9/15]" },
-  { img: avatar, name: "Studio Skin", tag: "Retouch", uses: "5.7k", ratio: "aspect-[9/16]" },
-  { img: glam, name: "Mono Drama", tag: "B&W", uses: "1.9k", ratio: "aspect-square" },
+const colB: Card[] = [
+  { img: cinema, title: "Golden Film", tag: "Cinematic", tagColor: "text-accent", uses: "6.1k", ratio: "aspect-[9/15]" },
+  { img: vhs, title: "Mono Drama", tag: "B&W", tagColor: "text-accent", uses: "1.9k", ratio: "aspect-[9/16]" },
+  { img: anime, title: "Color Pop", tag: "Vivid", tagColor: "text-brand", uses: "3.5k", ratio: "aspect-square" },
 ];
+
+function PresetCard({ card }: { card: Card }) {
+  return (
+    <button className="block w-full text-left">
+      <div className={`relative ${card.ratio} rounded-[2rem] overflow-hidden bg-card border border-border group`}>
+        <img
+          src={card.img}
+          alt={card.title}
+          className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent" />
+        <div className="absolute top-3 right-3 px-2 py-1 bg-black/60 backdrop-blur-md rounded-lg text-[9px] font-bold text-white">
+          AI
+        </div>
+        <div className="absolute bottom-3.5 left-3.5 right-3.5">
+          <span className={`text-[8px] font-black uppercase tracking-tighter ${card.tagColor}`}>{card.tag}</span>
+          <h4 className="text-sm font-bold text-white leading-tight">{card.title}</h4>
+          {card.uses && <p className="text-[9px] text-white/70 font-medium mt-0.5">{card.uses} uses</p>}
+        </div>
+      </div>
+    </button>
+  );
+}
 
 function Photoshop() {
-  const [active, setActive] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  const [src, setSrc] = useState<string>(avatar);
+  const [src, setSrc] = useState<string>(featured.img);
   const [filter, setFilter] = useState({ brightness: 100, contrast: 100, saturate: 100 });
 
   const onUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -51,13 +83,14 @@ function Photoshop() {
 
   return (
     <MobileFrame>
+      {/* Header */}
       <header className="sticky top-0 z-30 bg-background/80 backdrop-blur-xl">
         <div className="pt-12 pb-3 px-6 flex justify-between items-center">
           <div>
             <span className="text-[10px] font-bold tracking-[0.3em] text-muted-foreground uppercase block mb-0.5">
               Photoshop
             </span>
-            <h1 className="text-3xl font-extrabold tracking-tight">Edit Photos</h1>
+            <h1 className="text-3xl font-extrabold tracking-tight">Presets</h1>
           </div>
           <div className="flex gap-2.5">
             <button className="size-10 rounded-full bg-secondary grid place-items-center border border-border">
@@ -74,13 +107,12 @@ function Photoshop() {
       {/* Categories */}
       <div className="flex gap-2 overflow-x-auto px-6 py-5 no-scrollbar">
         {categories.map((c, i) => {
-          const isActive = active ? active === c : i === 0;
+          const active = i === 0;
           return (
             <button
               key={c}
-              onClick={() => setActive(c)}
               className={`px-5 py-2 rounded-full font-bold text-xs whitespace-nowrap transition-colors ${
-                isActive
+                active
                   ? "bg-brand text-brand-foreground shadow-[0_0_20px_color-mix(in_oklab,var(--brand)_40%,transparent)]"
                   : "bg-secondary text-muted-foreground border border-border"
               }`}
@@ -91,16 +123,16 @@ function Photoshop() {
         })}
       </div>
 
-      {/* Editor */}
-      <section className="px-6 mb-8">
-        <div className="relative w-full aspect-[1.1/1] rounded-[2.5rem] overflow-hidden bg-card ring-1 ring-border shadow-2xl">
+      {/* Featured — editable photo */}
+      <section className="px-6 mb-10">
+        <div className="relative w-full aspect-[1.6/1] rounded-[2.5rem] overflow-hidden bg-card ring-1 ring-border shadow-2xl group text-left">
           <img
             src={src}
-            alt="Edit preview"
-            className="absolute inset-0 w-full h-full object-cover transition-all"
+            alt={featured.title}
+            className="absolute inset-0 w-full h-full object-cover transition-all duration-300"
             style={{ filter: `brightness(${filter.brightness}%) contrast(${filter.contrast}%) saturate(${filter.saturate}%)` }}
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent pointer-events-none" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent pointer-events-none" />
 
           <div className="absolute top-5 left-5">
             <div className="px-3 py-1 bg-accent text-accent-foreground text-[9px] font-black uppercase tracking-widest rounded-full flex items-center gap-1.5 shadow-lg">
@@ -111,30 +143,20 @@ function Photoshop() {
           <input ref={fileRef} type="file" accept="image/*" onChange={onUpload} className="hidden" />
           <button
             onClick={() => fileRef.current?.click()}
-            className="absolute top-5 right-5 px-3 py-1.5 bg-white/90 backdrop-blur-md rounded-full border border-white/40 text-[10px] font-bold text-foreground flex items-center gap-1.5 shadow"
+            className="absolute top-5 right-5 px-3 py-1.5 bg-white/95 backdrop-blur-md rounded-full border border-white/40 text-[10px] font-bold text-foreground flex items-center gap-1.5 shadow"
           >
-            <ImagePlus className="size-3.5" /> Upload
+            <ImagePlus className="size-3.5" /> Change
           </button>
 
-          <div className="absolute bottom-5 left-5 right-5 bg-white/85 backdrop-blur-xl rounded-2xl p-3.5 border border-white/60 shadow-xl space-y-2.5">
-            <Slider label="Brightness" value={filter.brightness} onChange={(v) => setFilter({ ...filter, brightness: v })} />
+          <div className="absolute bottom-5 left-5 right-5 bg-white/90 backdrop-blur-xl rounded-2xl p-3 border border-white/60 shadow-xl space-y-2">
+            <Slider label="Light" value={filter.brightness} onChange={(v) => setFilter({ ...filter, brightness: v })} />
             <Slider label="Contrast" value={filter.contrast} onChange={(v) => setFilter({ ...filter, contrast: v })} />
-            <Slider label="Saturation" value={filter.saturate} onChange={(v) => setFilter({ ...filter, saturate: v })} />
+            <Slider label="Color" value={filter.saturate} onChange={(v) => setFilter({ ...filter, saturate: v })} />
           </div>
-        </div>
-
-        {/* Tools row */}
-        <div className="mt-5 grid grid-cols-6 gap-2">
-          {tools.map(({ icon: Icon, label }) => (
-            <button key={label} className="flex flex-col items-center gap-1.5 py-3 rounded-2xl bg-secondary border border-border hover:border-brand transition-colors">
-              <Icon className="size-4 text-brand" strokeWidth={2.5} />
-              <span className="text-[9px] font-bold uppercase tracking-tight">{label}</span>
-            </button>
-          ))}
         </div>
       </section>
 
-      {/* Presets — staggered grid */}
+      {/* Staggered grid */}
       <section className="px-6 pb-8">
         <div className="flex justify-between items-end mb-5">
           <div>
@@ -148,10 +170,10 @@ function Photoshop() {
 
         <div className="flex gap-3">
           <div className="flex-1 flex flex-col gap-3">
-            {presets.slice(0, 3).map((p, i) => <PresetCard key={i} preset={p} />)}
+            {colA.map((c, i) => <PresetCard key={i} card={c} />)}
           </div>
           <div className="flex-1 flex flex-col gap-3 pt-8">
-            {presets.slice(3).map((p, i) => <PresetCard key={i} preset={p} />)}
+            {colB.map((c, i) => <PresetCard key={i} card={c} />)}
           </div>
         </div>
       </section>
@@ -225,29 +247,10 @@ function Photoshop() {
   );
 }
 
-function PresetCard({ preset }: { preset: { img: string; name: string; tag: string; uses: string; ratio: string } }) {
-  return (
-    <button className="block w-full text-left">
-      <div className={`relative ${preset.ratio} rounded-[2rem] overflow-hidden bg-card border border-border group`}>
-        <img src={preset.img} alt={preset.name} className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent" />
-        <div className="absolute top-3 right-3 px-2 py-1 bg-black/60 backdrop-blur-md rounded-lg text-[9px] font-bold text-white">
-          AI
-        </div>
-        <div className="absolute bottom-3.5 left-3.5 right-3.5">
-          <span className="text-[8px] font-black uppercase tracking-tighter text-brand">{preset.tag}</span>
-          <h4 className="text-sm font-bold text-white leading-tight">{preset.name}</h4>
-          <p className="text-[9px] text-white/70 font-medium mt-0.5">{preset.uses} uses</p>
-        </div>
-      </div>
-    </button>
-  );
-}
-
 function Slider({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
   return (
     <div className="flex items-center gap-3">
-      <span className="text-[10px] font-bold uppercase tracking-wider text-foreground w-20">{label}</span>
+      <span className="text-[10px] font-bold uppercase tracking-wider text-foreground w-16">{label}</span>
       <input
         type="range"
         min={0}
