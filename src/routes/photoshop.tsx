@@ -120,14 +120,14 @@ function Photoshop() {
       {/* Sections */}
       <div className="space-y-7 pb-6">
         {sections.map((s) => (
-          <section key={s.title}>
-            <div className="px-5 mb-3 flex justify-between items-center">
+          <section key={s.title} className="px-5">
+            <div className="mb-3 flex justify-between items-center">
               <h3 className="text-[19px] font-extrabold tracking-tight">{s.title}</h3>
               <button className="flex items-center gap-0.5 px-3 py-1 rounded-full border border-border text-[11px] font-bold text-foreground">
                 All <ChevronRight className="size-3" strokeWidth={3} />
               </button>
             </div>
-            <div className="flex gap-3 px-5 overflow-x-auto no-scrollbar snap-x">
+            <div className="flex gap-3 overflow-x-auto no-scrollbar snap-x -mx-5 px-5">
               {s.items.map((p, i) => (
                 <button key={i} className="flex-none w-32 aspect-[4/5] snap-start rounded-lg overflow-hidden relative bg-secondary ring-1 ring-border">
                   <img src={p.img} alt={p.name} loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
