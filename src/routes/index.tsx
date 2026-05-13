@@ -9,7 +9,7 @@ import cinema from "@/assets/reel-cinema.jpg";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Explore Templates — Magic Studio" },
+      { title: "Videos — Magic Studio" },
       { name: "description", content: "Browse AI reel templates: glam, cinematic, anime, retro and more." },
     ],
   }),
@@ -86,7 +86,7 @@ function Categories() {
         <div className="pt-12 pb-3 px-6 flex justify-between items-center">
           <div>
             <span className="text-[10px] font-bold tracking-[0.3em] text-muted-foreground uppercase block mb-0.5">
-              Explore
+              Videos
             </span>
             <h1 className="text-3xl font-extrabold tracking-tight">Templates</h1>
           </div>
