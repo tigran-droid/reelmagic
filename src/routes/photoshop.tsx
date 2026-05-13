@@ -91,7 +91,7 @@ function Photoshop() {
       </header>
 
       {/* Featured top row */}
-      <section className="px-4 pt-3 pb-5">
+      <section className="px-5 pt-3 pb-5">
         <div className="flex gap-3 overflow-x-auto no-scrollbar snap-x">
           {featured.map((f, i) => (
             <button key={i} className="flex-none w-56 aspect-[5/4] rounded-lg overflow-hidden relative bg-secondary snap-start ring-1 ring-border">
