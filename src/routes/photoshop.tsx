@@ -132,91 +132,55 @@ function Photoshop() {
         </div>
       </section>
 
-      {/* Staggered grid */}
-      <section className="px-6 pb-8">
-        <div className="flex justify-between items-end mb-5">
-          <div>
-            <h3 className="text-xl font-extrabold tracking-tight">Trending presets</h3>
-            <p className="text-[11px] text-muted-foreground mt-0.5">One-tap looks crafted by AI</p>
-          </div>
-          <button className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest pb-1 hover:text-foreground transition-colors">
-            See all →
-          </button>
+      {/* Everyday Moments — soft rectangle row */}
+      <section className="mt-6 mb-8">
+        <div className="px-6 flex justify-between items-end mb-4">
+          <h3 className="text-lg font-extrabold tracking-tight">Everyday Moments</h3>
+          <span className="text-[11px] font-bold text-brand">View All</span>
         </div>
-
-        <div className="flex gap-3">
-          <div className="flex-1 flex flex-col gap-3">
-            {colA.map((c, i) => <PresetCard key={i} card={c} />)}
-          </div>
-          <div className="flex-1 flex flex-col gap-3 pt-8">
-            {colB.map((c, i) => <PresetCard key={i} card={c} />)}
-          </div>
+        <div className="flex gap-4 px-6 overflow-x-auto no-scrollbar snap-x">
+          {everyday.map((p, i) => (
+            <button key={i} className="flex-none w-32 snap-start text-left">
+              <div className="aspect-[4/5] rounded-2xl overflow-hidden mb-2 bg-secondary">
+                <img src={p.img} alt={p.name} className="w-full h-full object-cover" />
+              </div>
+              <p className="text-[11px] font-medium text-muted-foreground">{p.name}</p>
+            </button>
+          ))}
         </div>
       </section>
 
-      {/* Browse styles — Asymmetric Mosaic Flow */}
-      <section className="px-5 pb-10">
-        <div className="flex items-end justify-between mb-5 px-1">
-          <h3 className="text-2xl font-extrabold tracking-tight">Browse styles</h3>
-          <span className="text-[10px] font-bold text-brand uppercase tracking-widest pb-1">Edit</span>
+      {/* Portrait Styles — circles */}
+      <section className="mb-8">
+        <div className="px-6 flex justify-between items-end mb-4">
+          <h3 className="text-lg font-extrabold tracking-tight">Portrait Styles</h3>
         </div>
-
-        <div className="relative grid grid-cols-12 gap-3">
-          <button className="col-span-12 relative overflow-hidden rounded-[2rem] border border-border aspect-[16/9] shadow-2xl shadow-brand/10 group text-left">
-            <img src={glam} alt="Portrait" className="absolute inset-0 w-full h-full object-cover object-[50%_30%] transition-transform duration-500 group-hover:scale-105" />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/15 to-transparent" />
-            <div className="absolute bottom-5 left-6">
-              <p className="text-2xl font-extrabold text-white leading-tight">Portrait</p>
-              <div className="inline-flex items-center px-2.5 py-1 rounded-full bg-white/15 backdrop-blur-md border border-white/15 mt-2">
-                <p className="text-white text-[10px] font-bold uppercase tracking-wider">1.2k presets</p>
+        <div className="flex gap-6 px-6 overflow-x-auto no-scrollbar">
+          {portraits.map((p, i) => (
+            <button key={i} className="flex-none text-center">
+              <div className={`size-20 rounded-full overflow-hidden p-1 mb-2 border-2 ${p.active ? "border-brand/50" : "border-secondary"}`}>
+                <img src={p.img} alt={p.name} className="w-full h-full object-cover rounded-full" />
               </div>
-            </div>
-          </button>
+              <p className={`text-[10px] font-bold uppercase tracking-tight ${p.active ? "text-foreground" : "text-muted-foreground"}`}>{p.name}</p>
+            </button>
+          ))}
+        </div>
+      </section>
 
-          <button className="col-span-7 relative overflow-hidden rounded-[2rem] border border-border aspect-[3/4.5] -mt-4 z-10 shadow-2xl group text-left">
-            <img src={cinema} alt="Cinematic" className="absolute inset-0 w-full h-full object-cover object-[70%_50%] transition-transform duration-500 group-hover:scale-105" />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-transparent" />
-            <div className="absolute bottom-5 left-5">
-              <p className="text-lg font-bold text-white">Cinematic</p>
-              <p className="text-white/70 text-[11px] mt-0.5 font-medium">860 looks</p>
-            </div>
-          </button>
-
-          <button className="col-span-5 relative overflow-hidden rounded-[1.75rem] border border-border aspect-square group text-left">
-            <img src={anime} alt="Stylize" className="absolute inset-0 w-full h-full object-cover object-[30%_40%] transition-transform duration-500 group-hover:scale-105" />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/75 to-transparent" />
-            <div className="absolute bottom-3.5 left-4">
-              <p className="text-base font-bold text-white">Stylize</p>
-              <p className="text-white/70 text-[10px] font-medium">540 looks</p>
-            </div>
-          </button>
-
-          <button className="col-span-5 col-start-8 relative overflow-hidden rounded-[1.75rem] border border-border aspect-square -mt-6 z-20 shadow-xl group text-left">
-            <img src={vhs} alt="Vintage" className="absolute inset-0 w-full h-full object-cover object-[50%_70%] transition-transform duration-500 group-hover:scale-105" />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/75 to-transparent" />
-            <div className="absolute bottom-3.5 left-4">
-              <p className="text-base font-bold text-white">Vintage</p>
-              <p className="text-white/70 text-[10px] font-medium">410 looks</p>
-            </div>
-          </button>
-
-          <button className="col-span-12 relative overflow-hidden rounded-[2rem] border border-border aspect-[21/10] -mt-2 shadow-2xl shadow-accent/10 group text-left">
-            <img src={anime} alt="Color Pop" className="absolute inset-0 w-full h-full object-cover object-[80%_20%] transition-transform duration-500 group-hover:scale-105" />
-            <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/40 to-transparent" />
-            <div className="absolute inset-y-0 left-7 flex flex-col justify-center">
-              <p className="text-2xl font-extrabold text-white tracking-tight uppercase italic">Color Pop</p>
-              <p className="text-white text-[10px] font-bold tracking-tighter mt-1">620 PRESETS</p>
-            </div>
-          </button>
-
-          <button className="col-span-12 relative overflow-hidden rounded-[2.25rem] border border-border aspect-square group text-left">
-            <img src={glam} alt="Studio" className="absolute inset-0 w-full h-full object-cover object-[50%_80%] transition-transform duration-500 group-hover:scale-105" />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-transparent" />
-            <div className="absolute bottom-8 left-8">
-              <p className="text-4xl font-extrabold text-white tracking-tighter">Studio</p>
-              <p className="text-white text-sm font-bold mt-2">1.5k creators</p>
-            </div>
-          </button>
+      {/* Travel & Scenery — squares with overlay caption */}
+      <section className="mb-12">
+        <div className="px-6 flex justify-between items-end mb-4">
+          <h3 className="text-lg font-extrabold tracking-tight">Travel & Scenery</h3>
+        </div>
+        <div className="flex gap-3 px-6 overflow-x-auto no-scrollbar">
+          {travel.map((p, i) => (
+            <button key={i} className="flex-none w-[160px] aspect-square rounded-xl overflow-hidden relative bg-secondary">
+              <img src={p.img} alt={p.name} className="w-full h-full object-cover" />
+              <div className="absolute bottom-2 left-2 px-2 py-1 bg-black/40 backdrop-blur-md rounded text-[9px] font-bold text-white uppercase">
+                {p.name}
+              </div>
+            </button>
+          ))}
         </div>
       </section>
     </MobileFrame>
