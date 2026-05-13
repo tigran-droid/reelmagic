@@ -117,8 +117,8 @@ function Feed() {
               ))}
             </div>
 
-            {/* Right action rail */}
-            <div className="absolute right-3 bottom-56 flex flex-col items-center gap-5 text-white">
+            {/* Right action rail — grouped tight */}
+            <div className="absolute right-3 bottom-44 flex flex-col items-center gap-2 text-white">
               <Action icon={<Heart className="size-6" fill="white" />} label={r.likes} />
               <Action icon={<MessageCircle className="size-6" />} label={r.comments} />
               <Action icon={<Send className="size-6" />} label="Share" />
@@ -126,33 +126,35 @@ function Feed() {
             </div>
 
             {/* Bottom info block */}
-            <div className="absolute bottom-28 left-0 right-0 px-5 space-y-3 text-white">
-              <p className="text-base font-semibold leading-tight">{r.title}</p>
-              <div className="flex flex-wrap gap-x-2 gap-y-1 text-xs text-white/80">
+            <div className="absolute bottom-28 left-0 right-0 px-5 space-y-2.5 text-white">
+              <p className="text-[17px] font-semibold leading-tight tracking-tight drop-shadow">
+                {r.title}
+              </p>
+              <div className="flex flex-wrap gap-x-2 gap-y-1 text-xs font-medium text-white/85">
                 {r.hashtags.map((h) => (
                   <span key={h}>{h}</span>
                 ))}
               </div>
 
-              <div className="flex items-center justify-between gap-3 pt-1">
-                <div className="flex items-center gap-2 min-w-0">
-                  <img
-                    src={r.cover}
-                    alt=""
-                    className="size-10 rounded-md object-cover border border-white/20"
-                  />
-                  <span className="text-xs text-white/90 truncate">{r.song}</span>
-                </div>
-
+              <div className="flex items-center justify-between gap-3 pt-1.5">
                 <button
                   type="button"
                   disabled
                   aria-disabled="true"
-                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full bg-white/15 backdrop-blur-md border border-white/20 text-xs font-semibold text-white/70 cursor-not-allowed"
+                  className="inline-flex items-center gap-1.5 pl-3 pr-4 py-2 rounded-full bg-white text-black text-xs font-semibold shadow-lg shadow-black/20 opacity-70 cursor-not-allowed"
                 >
                   <Sparkles className="size-3.5" />
                   Create yours
                 </button>
+
+                <div className="flex items-center gap-2 min-w-0 max-w-[55%]">
+                  <span className="text-[11px] text-white/85 truncate">{r.song}</span>
+                  <img
+                    src={r.cover}
+                    alt=""
+                    className="size-9 rounded-[6px] object-cover border border-white/25 shadow-md shadow-black/30 shrink-0"
+                  />
+                </div>
               </div>
             </div>
           </article>
