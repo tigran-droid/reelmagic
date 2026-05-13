@@ -1,6 +1,7 @@
+import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { MobileFrame } from "@/components/MobileFrame";
-import { Heart, MessageCircle, Send, Music2, Bookmark } from "lucide-react";
+import { Heart, MessageCircle, Send, Bookmark, Sparkles } from "lucide-react";
 import feed1 from "@/assets/feed-1.jpg";
 import glam from "@/assets/reel-glam.jpg";
 import anime from "@/assets/reel-anime.jpg";
@@ -16,49 +17,77 @@ export const Route = createFileRoute("/feed")({
   component: Feed,
 });
 
-const reels = [
+type Reel = {
+  img: string;
+  cover: string;
+  title: string;
+  hashtags: string[];
+  song: string;
+  likes: string;
+  comments: string;
+};
+
+const globalReels: Reel[] = [
   {
     img: feed1,
-    user: "@luna_ai",
-    caption: "Trying out the new cinematic prompt for city nights. This looks insane.",
-    audio: "Original Audio — Stardust",
+    cover: feed1,
+    title: "Neon city nights",
+    hashtags: ["#cinematic", "#neon", "#aiart"],
+    song: "Stardust — Luna",
     likes: "12.4k",
     comments: "432",
-    template: "Neon Bloom",
   },
   {
     img: glam,
-    user: "@elysia",
-    caption: "Glam template hits different ✨ #AIArt",
-    audio: "Hot Pink — synthwave mix",
+    cover: glam,
+    title: "Glam hour glow up",
+    hashtags: ["#glam", "#portrait", "#studio"],
+    song: "Hot Pink — Synthwave",
     likes: "8.2k",
     comments: "211",
-    template: "Ultra Glow",
   },
   {
     img: anime,
-    user: "@kaito.dev",
-    caption: "Anime me in Shibuya at 2am 🌃",
-    audio: "Tokyo Drift — lo-fi",
+    cover: anime,
+    title: "Shibuya at 2am",
+    hashtags: ["#anime", "#tokyo", "#night"],
+    song: "Tokyo Drift — Lo-fi",
     likes: "21.7k",
     comments: "1.1k",
-    template: "Cyber City",
   },
+];
+
+const regionalReels: Reel[] = [
   {
     img: cinema,
-    user: "@mira",
-    caption: "Golden hour, every hour.",
-    audio: "Sun Sets Twice — original",
+    cover: cinema,
+    title: "Golden hour, every hour",
+    hashtags: ["#local", "#goldenhour", "#film"],
+    song: "Sun Sets Twice — Mira",
     likes: "5.6k",
     comments: "98",
-    template: "16mm Film",
+  },
+  {
+    img: glam,
+    cover: glam,
+    title: "Hometown glow",
+    hashtags: ["#regional", "#portrait"],
+    song: "Local Tape — Aria",
+    likes: "3.1k",
+    comments: "74",
   },
 ];
 
 function Feed() {
+  const [tab, setTab] = useState<"global" | "regional">("global");
+  const reels = tab === "global" ? globalReels : regionalReels;
+
   return (
     <MobileFrame immersive>
-      <div className="h-dvh overflow-y-scroll snap-y snap-mandatory no-scrollbar">
+      <div
+        key={tab}
+        className="h-dvh overflow-y-scroll snap-y snap-mandatory no-scrollbar"
+      >
         {reels.map((r, i) => (
           <article
             key={i}
@@ -66,41 +95,64 @@ function Feed() {
           >
             <img
               src={r.img}
-              alt={r.caption}
+              alt={r.title}
               loading={i === 0 ? "eager" : "lazy"}
               className="absolute inset-0 w-full h-full object-cover"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-black/40" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-black/50" />
 
-            <div className="absolute top-14 left-0 right-0 flex justify-center gap-6 text-sm font-semibold text-white/70">
-              <span>Following</span>
-              <span className="text-white relative">
-                For You
-                <div className="absolute -bottom-2 inset-x-2 h-0.5 bg-white rounded-full" />
-              </span>
+            {/* Top tabs */}
+            <div className="absolute top-14 left-0 right-0 flex justify-center gap-8 text-sm font-semibold">
+              {(["global", "regional"] as const).map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setTab(t)}
+                  className={`relative capitalize ${tab === t ? "text-white" : "text-white/60"}`}
+                >
+                  {t}
+                  {tab === t && (
+                    <div className="absolute -bottom-2 inset-x-2 h-0.5 bg-white rounded-full" />
+                  )}
+                </button>
+              ))}
             </div>
 
-            <div className="absolute bottom-28 left-0 right-0 px-5 flex items-end justify-between gap-3">
-              <div className="flex-1 text-white space-y-2">
-                <p className="font-semibold">{r.user}</p>
-                <p className="text-sm text-white/90 max-w-[28ch] leading-snug">{r.caption}</p>
-                <div className="flex items-center gap-2 text-xs text-white/80">
-                  <Music2 className="size-3.5" />
-                  <span className="truncate max-w-[20ch]">{r.audio}</span>
-                </div>
-                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-brand/90 text-brand-foreground text-[11px] font-semibold mt-1">
-                  Template · {r.template}
-                </div>
+            {/* Right action rail */}
+            <div className="absolute right-3 bottom-56 flex flex-col items-center gap-5 text-white">
+              <Action icon={<Heart className="size-6" fill="white" />} label={r.likes} />
+              <Action icon={<MessageCircle className="size-6" />} label={r.comments} />
+              <Action icon={<Send className="size-6" />} label="Share" />
+              <Action icon={<Bookmark className="size-6" />} label="Save" />
+            </div>
+
+            {/* Bottom info block */}
+            <div className="absolute bottom-28 left-0 right-0 px-5 space-y-3 text-white">
+              <p className="text-base font-semibold leading-tight">{r.title}</p>
+              <div className="flex flex-wrap gap-x-2 gap-y-1 text-xs text-white/80">
+                {r.hashtags.map((h) => (
+                  <span key={h}>{h}</span>
+                ))}
               </div>
 
-              <div className="flex flex-col items-center gap-5 text-white">
-                <div className="size-11 rounded-full bg-white/15 backdrop-blur-md grid place-items-center border border-white/20">
-                  <img src={feed1} alt="" className="size-full rounded-full object-cover" />
+              <div className="flex items-center justify-between gap-3 pt-1">
+                <div className="flex items-center gap-2 min-w-0">
+                  <img
+                    src={r.cover}
+                    alt=""
+                    className="size-10 rounded-md object-cover border border-white/20"
+                  />
+                  <span className="text-xs text-white/90 truncate">{r.song}</span>
                 </div>
-                <Action icon={<Heart className="size-6" fill="white" />} label={r.likes} />
-                <Action icon={<MessageCircle className="size-6" />} label={r.comments} />
-                <Action icon={<Bookmark className="size-6" />} label="Save" />
-                <Action icon={<Send className="size-6" />} label="Share" />
+
+                <button
+                  type="button"
+                  disabled
+                  aria-disabled="true"
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full bg-white/15 backdrop-blur-md border border-white/20 text-xs font-semibold text-white/70 cursor-not-allowed"
+                >
+                  <Sparkles className="size-3.5" />
+                  Create yours
+                </button>
               </div>
             </div>
           </article>
