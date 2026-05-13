@@ -83,7 +83,7 @@ function Photoshop() {
   return (
     <MobileFrame>
       {/* Header */}
-      <header className="px-6 pt-8 pb-2 flex items-center justify-between">
+      <header className="px-5 pt-8 pb-2 flex items-center justify-between">
         <h1 className="text-2xl font-extrabold tracking-tight">Photoshop</h1>
         <button className="size-9 rounded-full bg-secondary border border-border flex items-center justify-center">
           <SlidersHorizontal className="size-4" strokeWidth={2.5} />
@@ -91,7 +91,7 @@ function Photoshop() {
       </header>
 
       {/* Featured top row */}
-      <section className="px-6 pt-3 pb-5">
+      <section className="px-5 pt-3 pb-5">
         <div className="flex gap-3 overflow-x-auto no-scrollbar snap-x">
           {featured.map((f, i) => (
             <button key={i} className="flex-none w-56 aspect-[5/4] rounded-lg overflow-hidden relative bg-secondary snap-start ring-1 ring-border">
@@ -120,14 +120,14 @@ function Photoshop() {
       {/* Sections */}
       <div className="space-y-7 pb-6">
         {sections.map((s) => (
-          <section key={s.title} className="px-6">
+          <section key={s.title} className="px-5">
             <div className="mb-3 flex justify-between items-center">
               <h3 className="text-[19px] font-extrabold tracking-tight">{s.title}</h3>
               <button className="flex items-center gap-0.5 px-3 py-1 rounded-full border border-border text-[11px] font-bold text-foreground">
                 All <ChevronRight className="size-3" strokeWidth={3} />
               </button>
             </div>
-            <div className="flex gap-3 overflow-x-auto no-scrollbar snap-x -mx-6 px-6">
+            <div className="flex gap-3 overflow-x-auto no-scrollbar snap-x">
               {s.items.map((p, i) => (
                 <button key={i} className="flex-none w-32 aspect-[4/5] snap-start rounded-lg overflow-hidden relative bg-secondary ring-1 ring-border">
                   <img src={p.img} alt={p.name} loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
