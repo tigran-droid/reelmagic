@@ -118,15 +118,15 @@ function Feed() {
             </div>
 
             {/* Right action rail — grouped tight */}
-            <div className="absolute right-3 bottom-44 flex flex-col items-center gap-2 text-white">
-              <Action icon={<Heart className="size-6" fill="white" />} label={r.likes} />
-              <Action icon={<MessageCircle className="size-6" />} label={r.comments} />
-              <Action icon={<Send className="size-6" />} label="Share" />
-              <Action icon={<Bookmark className="size-6" />} label="Save" />
+            <div className="absolute right-3 bottom-44 flex flex-col items-center gap-4 text-white">
+              <Action icon={<Heart className="size-7" fill="white" />} label={r.likes} />
+              <Action icon={<MessageCircle className="size-7" />} label={r.comments} />
+              <Action icon={<Send className="size-7" />} label="Share" />
+              <Action icon={<Bookmark className="size-7" />} label="Save" />
             </div>
 
             {/* Bottom info block */}
-            <div className="absolute bottom-28 left-0 right-0 px-5 space-y-2.5 text-white">
+            <div className="absolute bottom-28 left-0 right-0 px-5 space-y-3 text-white">
               <p className="text-[17px] font-semibold leading-tight tracking-tight drop-shadow">
                 {r.title}
               </p>
@@ -141,9 +141,9 @@ function Feed() {
                   type="button"
                   disabled
                   aria-disabled="true"
-                  className="inline-flex items-center gap-1.5 pl-3 pr-4 py-2 rounded-full bg-white text-black text-xs font-semibold shadow-lg shadow-black/20 opacity-70 cursor-not-allowed"
+                  className="inline-flex items-center gap-2 pl-4 pr-5 py-2.5 rounded-2xl bg-white text-black text-sm font-semibold shadow-lg shadow-black/20 opacity-70 cursor-not-allowed"
                 >
-                  <Sparkles className="size-3.5" />
+                  <Sparkles className="size-4" />
                   Create yours
                 </button>
 
@@ -166,10 +166,8 @@ function Feed() {
 
 function Action({ icon, label }: { icon: React.ReactNode; label: string }) {
   return (
-    <button className="flex flex-col items-center gap-1">
-      <div className="size-11 rounded-full bg-white/10 backdrop-blur-md grid place-items-center border border-white/15 active:scale-95 transition-transform">
-        {icon}
-      </div>
+    <button className="flex flex-col items-center gap-1 active:scale-95 transition-transform drop-shadow-[0_2px_4px_rgba(0,0,0,0.4)]">
+      {icon}
       <span className="text-[11px] font-semibold">{label}</span>
     </button>
   );
