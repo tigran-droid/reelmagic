@@ -167,11 +167,13 @@ function Feed() {
                 </button>
 
                 <div className="flex items-center gap-2 min-w-0 max-w-[55%]">
-                  <span className="text-[11px] text-white/85 truncate">{r.song}</span>
+                  <span className="text-[11px] text-white/85 truncate animate-[pulse_1.6s_ease-in-out_infinite]">
+                    ♪ {r.song}
+                  </span>
                   <img
                     src={r.cover}
                     alt=""
-                    className="size-9 rounded-[6px] object-cover border border-white/25 shadow-md shadow-black/30 shrink-0"
+                    className="size-9 rounded-full object-cover border border-white/30 shadow-md shadow-black/30 shrink-0 animate-[spin_5s_linear_infinite]"
                   />
                 </div>
               </div>
