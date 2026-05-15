@@ -86,7 +86,7 @@ function Feed() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [needsTapIndex, setNeedsTapIndex] = useState<number | null>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
-  const mediaRefs = useRef<(HTMLMediaElement | null)[]>([]);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const dbReels = useQuery({
     queryKey: ["feed-reels"],
@@ -127,30 +127,45 @@ function Feed() {
   }, [tab]);
 
   useEffect(() => {
-    mediaRefs.current = mediaRefs.current.slice(0, reels.length);
-  }, [reels.length]);
+    const activeReel = reels[activeIndex];
+    const audioUrl = activeReel?.audio;
 
-  useEffect(() => {
-    mediaRefs.current.forEach((media, index) => {
-      if (!media || index === activeIndex) return;
-      media.pause();
-      media.currentTime = 0;
-    });
+    if (!audioUrl) {
+      audioRef.current?.pause();
+      audioRef.current = null;
+      return;
+    }
 
-    const activeMedia = mediaRefs.current[activeIndex];
-    if (!activeMedia) return;
+    const existing = audioRef.current;
+    if (existing) {
+      existing.pause();
+      existing.currentTime = 0;
+    }
 
-    activeMedia.currentTime = 0;
-    activeMedia.play().then(() => {
+    const player = new Audio(audioUrl);
+    player.loop = true;
+    player.preload = "auto";
+    audioRef.current = player;
+
+    player.play().then(() => {
       setNeedsTapIndex((current) => (current === activeIndex ? null : current));
     }).catch(() => {
       setNeedsTapIndex(activeIndex);
     });
+
+    return () => {
+      player.pause();
+      player.currentTime = 0;
+      if (audioRef.current === player) {
+        audioRef.current = null;
+      }
+    };
   }, [activeIndex, reels.length]);
 
   useEffect(() => {
     return () => {
-      mediaRefs.current.forEach((media) => media?.pause());
+      audioRef.current?.pause();
+      audioRef.current = null;
     };
   }, []);
 
@@ -166,19 +181,18 @@ function Feed() {
   };
 
   const handleToggleAudio = (index: number) => {
-    const media = mediaRefs.current[index];
-    if (!media) return;
+    const currentAudio = audioRef.current;
+    if (index !== activeIndex) {
+      setActiveIndex(index);
+      setNeedsTapIndex(null);
+      return;
+    }
 
-    mediaRefs.current.forEach((item, itemIndex) => {
-      if (!item || itemIndex === index) return;
-      item.pause();
-      item.currentTime = 0;
-    });
+    if (!currentAudio) return;
 
-    if (media.paused) {
-      media.currentTime = 0;
-      media.play().then(() => {
-        setActiveIndex(index);
+    if (currentAudio.paused) {
+      currentAudio.currentTime = 0;
+      currentAudio.play().then(() => {
         setNeedsTapIndex(null);
       }).catch(() => {
         setNeedsTapIndex(index);
@@ -186,7 +200,7 @@ function Feed() {
       return;
     }
 
-    media.pause();
+    currentAudio.pause();
     setNeedsTapIndex(index);
   };
 
@@ -205,9 +219,6 @@ function Feed() {
             eager={i === 0}
             needsTap={needsTapIndex === i}
             onToggleAudio={() => handleToggleAudio(i)}
-            setMediaRef={(node) => {
-              mediaRefs.current[i] = node;
-            }}
           >
             <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-black/50" />
 
@@ -281,14 +292,12 @@ function ReelCard({
   eager,
   needsTap,
   onToggleAudio,
-  setMediaRef,
   children,
 }: {
   reel: Reel;
   eager: boolean;
   needsTap: boolean;
   onToggleAudio: () => void;
-  setMediaRef: (node: HTMLMediaElement | null) => void;
   children: React.ReactNode;
 }) {
   return (
@@ -297,25 +306,6 @@ function ReelCard({
       className="relative h-dvh w-full snap-start snap-always overflow-hidden bg-black"
     >
       <PhotoCarousel reel={reel} eager={eager} />
-      {reel.audio && (
-        /\.(mp4|webm|mov|m4v|ogv)(\?|$)/i.test(reel.audio) ? (
-          <video
-            ref={setMediaRef as React.Ref<HTMLVideoElement>}
-            src={reel.audio}
-            loop
-            preload="auto"
-            playsInline
-            className="hidden"
-          />
-        ) : (
-          <audio
-            ref={setMediaRef as React.Ref<HTMLAudioElement>}
-            src={reel.audio}
-            loop
-            preload="auto"
-          />
-        )
-      )}
       {children}
       {needsTap && reel.audio && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
