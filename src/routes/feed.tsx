@@ -3,9 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { MobileFrame } from "@/components/MobileFrame";
 import { Heart, MessageCircle, Send, Bookmark, Sparkles, X, Upload, Loader2, Download } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
-import { generateFromTemplate } from "@/lib/template-generate.functions";
 import feed1 from "@/assets/feed-1.jpg";
 import glam from "@/assets/reel-glam.jpg";
 import anime from "@/assets/reel-anime.jpg";
@@ -411,7 +409,6 @@ function CreateYoursModal({ reel, onClose }: { reel: Reel; onClose: () => void }
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const generate = useServerFn(generateFromTemplate);
 
   useEffect(() => {
     const urls = files.map((f) => URL.createObjectURL(f));
@@ -433,10 +430,14 @@ function CreateYoursModal({ reel, onClose }: { reel: Reel; onClose: () => void }
     setResult(null);
     try {
       const dataUrls = await Promise.all(files.map(fileToDataUrl));
-      const res = await generate({
-        data: { templateUrl: reel.cover, userImages: dataUrls },
-      });
-      setResult(res.imageDataUrl);
+      const { data, error: fnErr } = await supabase.functions.invoke(
+        "generate-from-template",
+        { body: { templateUrl: reel.cover, userImages: dataUrls } },
+      );
+      if (fnErr) throw fnErr;
+      if (data?.error) throw new Error(data.error);
+      if (!data?.imageDataUrl) throw new Error("No image returned");
+      setResult(data.imageDataUrl);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Generation failed");
     } finally {
