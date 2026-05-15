@@ -194,6 +194,7 @@ function ReelCard({
 }) {
   const ref = useRef<HTMLElement>(null);
   const audioRef = useRef<HTMLMediaElement>(null);
+  const [needsTap, setNeedsTap] = useState(false);
 
   useEffect(() => {
     const el = ref.current;
@@ -204,7 +205,7 @@ function ReelCard({
         if (!audio) return;
         if (entry.isIntersecting && entry.intersectionRatio > 0.6) {
           audio.currentTime = 0;
-          audio.play().catch(() => {});
+          audio.play().catch(() => setNeedsTap(true));
         } else {
           audio.pause();
         }
@@ -215,9 +216,20 @@ function ReelCard({
     return () => io.disconnect();
   }, []);
 
+  const handleTap = () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (audio.paused) {
+      audio.play().then(() => setNeedsTap(false)).catch(() => {});
+    } else {
+      audio.pause();
+    }
+  };
+
   return (
     <article
       ref={ref}
+      onClick={handleTap}
       className="relative h-dvh w-full snap-start snap-always overflow-hidden bg-black"
     >
       <img
@@ -246,6 +258,13 @@ function ReelCard({
         )
       )}
       {children}
+      {needsTap && reel.audio && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="bg-black/60 text-white text-xs font-semibold px-3 py-1.5 rounded-full backdrop-blur-sm">
+            Tap to play sound
+          </div>
+        </div>
+      )}
     </article>
   );
 }
