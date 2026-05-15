@@ -8,14 +8,14 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-async function urlToDataUrl(url: string): Promise<string> {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Failed to fetch image (${res.status})`);
-  const mime = res.headers.get("content-type") || "image/png";
-  const buf = new Uint8Array(await res.arrayBuffer());
-  let bin = "";
-  for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i]);
-  return `data:${mime};base64,${btoa(bin)}`;
+function dataUrlToBlob(dataUrl: string): Blob {
+  const m = /^data:([^;]+);base64,(.*)$/.exec(dataUrl);
+  if (!m) throw new Error("Invalid image data URL");
+  const mime = m[1];
+  const bin = atob(m[2]);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new Blob([bytes], { type: mime });
 }
 
 serve(async (req) => {
@@ -24,8 +24,8 @@ serve(async (req) => {
   }
 
   try {
-    const apiKey = Deno.env.get("LOVABLE_API_KEY");
-    if (!apiKey) throw new Error("LOVABLE_API_KEY not configured");
+    const apiKey = Deno.env.get("OPENAI_API_KEY");
+    if (!apiKey) throw new Error("OPENAI_API_KEY not configured");
 
     const { templateUrl, userImages, prompt } = await req.json();
     if (!templateUrl) throw new Error("templateUrl required");
@@ -34,57 +34,50 @@ serve(async (req) => {
     }
     if (userImages.length > 4) throw new Error("Maximum 4 user photos");
 
-    const templateDataUrl = await urlToDataUrl(templateUrl);
+    const tplRes = await fetch(templateUrl);
+    if (!tplRes.ok) throw new Error(`Failed to fetch template (${tplRes.status})`);
+    const tplBlob = await tplRes.blob();
 
-    const instruction = prompt ??
-      "Recreate the EXACT composition, pose, lighting, color grading, outfit style, background, props and overall aesthetic of the FIRST image (the template), but replace the person/people in it with the person/people shown in the FOLLOWING reference photos. Preserve the reference person's facial identity, skin tone, hair and distinguishing features faithfully — do not distort, beautify, or alter the face. Keep the result photorealistic and high quality.";
+    const form = new FormData();
+    form.append("model", "gpt-image-1");
+    form.append(
+      "prompt",
+      prompt ??
+        "Recreate the EXACT composition, pose, lighting, color grading, outfit style, background, props and overall aesthetic of the FIRST image (the template), but replace the person/people in it with the person/people shown in the FOLLOWING reference photos. Preserve the reference person's facial identity, skin tone, hair and distinguishing features faithfully — do not distort, beautify, or alter the face. Keep the result photorealistic and high quality.",
+    );
+    // Cost-optimized: medium quality + square = ~$0.04/image (was ~$0.20)
+    form.append("size", "1024x1024");
+    form.append("quality", "medium");
+    form.append("n", "1");
+    form.append("image[]", tplBlob, "template.png");
 
-    const content: any[] = [{ type: "text", text: instruction }];
-    content.push({ type: "image_url", image_url: { url: templateDataUrl } });
-    for (const dataUrl of userImages) {
-      content.push({ type: "image_url", image_url: { url: dataUrl } });
-    }
-
-    const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash-image",
-        messages: [{ role: "user", content }],
-        modalities: ["image", "text"],
-      }),
+    userImages.forEach((dataUrl: string, i: number) => {
+      const blob = dataUrlToBlob(dataUrl);
+      const ext = (blob.type.split("/")[1] || "png").split("+")[0];
+      form.append("image[]", blob, `user-${i}.${ext}`);
     });
 
-    if (!aiRes.ok) {
-      const text = await aiRes.text();
-      console.error("Lovable AI error", aiRes.status, text);
-      if (aiRes.status === 429) {
-        return new Response(
-          JSON.stringify({ error: "Rate limit exceeded, please try again in a moment." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-        );
-      }
-      if (aiRes.status === 402) {
-        return new Response(
-          JSON.stringify({ error: "AI credits exhausted. Add funds in Lovable workspace settings." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-        );
-      }
+    const openaiRes = await fetch("https://api.openai.com/v1/images/edits", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}` },
+      body: form,
+    });
+
+    if (!openaiRes.ok) {
+      const text = await openaiRes.text();
+      console.error("OpenAI error", openaiRes.status, text);
       return new Response(
-        JSON.stringify({ error: `Image generation failed [${aiRes.status}]: ${text.slice(0, 300)}` }),
+        JSON.stringify({ error: `OpenAI image edit failed [${openaiRes.status}]: ${text.slice(0, 500)}` }),
         { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
-    const json = await aiRes.json();
-    const imageUrl = json?.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-    if (!imageUrl) throw new Error("AI response missing image data");
+    const json = await openaiRes.json();
+    const b64 = json?.data?.[0]?.b64_json;
+    if (!b64) throw new Error("OpenAI response missing image data");
 
     return new Response(
-      JSON.stringify({ imageDataUrl: imageUrl }),
+      JSON.stringify({ imageDataUrl: `data:image/png;base64,${b64}` }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (e) {
