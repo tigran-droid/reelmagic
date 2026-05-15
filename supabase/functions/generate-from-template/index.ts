@@ -43,7 +43,7 @@ serve(async (req) => {
     form.append(
       "prompt",
       prompt ??
-        "Recreate the EXACT composition, pose, lighting, color grading, outfit style, background, props and overall aesthetic of the FIRST image (the template), but replace the person/people in it with the person/people shown in the FOLLOWING reference photos. Preserve the reference person's facial identity, skin tone, hair and distinguishing features faithfully — do not distort, beautify, or alter the face. Keep the result photorealistic and high quality.",
+        "Create a new portrait that matches the style of the first image (composition, pose, lighting, color grading, wardrobe, background and props) while featuring the subject from the additional reference photos. Keep their face shape, hairstyle and overall likeness consistent with the reference. Tasteful, professional, fully clothed, photorealistic, high quality.",
     );
     // Cost-optimized: medium quality + square = ~$0.04/image (was ~$0.20)
     form.append("size", "1024x1536");
