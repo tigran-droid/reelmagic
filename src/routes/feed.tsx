@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { MobileFrame } from "@/components/MobileFrame";
-import { Heart, MessageCircle, Send, Bookmark, Sparkles, X, Upload, Loader2, Download } from "lucide-react";
+import { Heart, MessageCircle, Send, Bookmark, Sparkles } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import feed1 from "@/assets/feed-1.jpg";
@@ -85,9 +85,26 @@ function Feed() {
   const [tab, setTab] = useState<"global" | "regional">("global");
   const [activeIndex, setActiveIndex] = useState(0);
   const [needsTapIndex, setNeedsTapIndex] = useState<number | null>(null);
-  const [createForReel, setCreateForReel] = useState<Reel | null>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const navigate = useNavigate();
+
+  const startCreate = (reel: Reel) => {
+    try {
+      sessionStorage.setItem(
+        "create:draft",
+        JSON.stringify({
+          images: reel.images,
+          cover: reel.cover,
+          title: reel.title,
+          hashtags: reel.hashtags,
+        }),
+      );
+    } catch {
+      // ignore storage errors
+    }
+    navigate({ to: "/create" });
+  };
 
   const dbReels = useQuery({
     queryKey: ["feed-reels"],
@@ -263,7 +280,7 @@ function Feed() {
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
-                    setCreateForReel(r);
+                    startCreate(r);
                   }}
                   className="inline-flex items-center gap-2 pl-4 pr-5 py-2.5 rounded-2xl bg-white text-black text-sm font-semibold shadow-lg shadow-black/20 active:scale-95 transition-transform"
                 >
@@ -286,12 +303,6 @@ function Feed() {
           </ReelCard>
         ))}
       </div>
-      {createForReel && (
-        <CreateYoursModal
-          reel={createForReel}
-          onClose={() => setCreateForReel(null)}
-        />
-      )}
     </MobileFrame>
   );
 }
@@ -394,185 +405,3 @@ function PhotoCarousel({ reel, eager }: { reel: Reel; eager: boolean }) {
   );
 }
 
-function fileToDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(r.result as string);
-    r.onerror = () => reject(r.error);
-    r.readAsDataURL(file);
-  });
-}
-
-function CreateYoursModal({ reel, onClose }: { reel: Reel; onClose: () => void }) {
-  const [files, setFiles] = useState<File[]>([]);
-  const [previews, setPreviews] = useState<string[]>([]);
-  const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const urls = files.map((f) => URL.createObjectURL(f));
-    setPreviews(urls);
-    return () => urls.forEach((u) => URL.revokeObjectURL(u));
-  }, [files]);
-
-  const onPick = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const list = Array.from(e.target.files ?? []).slice(0, 4);
-    setFiles(list);
-    setResult(null);
-    setError(null);
-  };
-
-  const onGenerate = async () => {
-    if (files.length === 0) return;
-    setBusy(true);
-    setError(null);
-    setResult(null);
-    try {
-      const dataUrls = await Promise.all(files.map(fileToDataUrl));
-      const { data, error: fnErr } = await supabase.functions.invoke(
-        "generate-from-template",
-        { body: { templateUrl: reel.cover, userImages: dataUrls } },
-      );
-      if (fnErr) throw fnErr;
-      if (data?.error) throw new Error(data.error);
-      if (!data?.imageDataUrl) throw new Error("No image returned");
-      setResult(data.imageDataUrl);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Generation failed");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center">
-      <div className="bg-background w-full max-w-md max-h-[92dvh] overflow-y-auto rounded-t-3xl sm:rounded-3xl p-5 space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-              Create yours
-            </p>
-            <h2 className="text-lg font-extrabold tracking-tight">{reel.title}</h2>
-          </div>
-          <button
-            onClick={onClose}
-            className="size-9 rounded-full bg-secondary grid place-items-center"
-            aria-label="Close"
-          >
-            <X className="size-4" />
-          </button>
-        </div>
-
-        <div className="flex gap-3">
-          <img
-            src={reel.cover}
-            alt="Template"
-            className="w-20 h-28 rounded-xl object-cover ring-1 ring-border"
-          />
-          <p className="text-xs text-muted-foreground leading-relaxed">
-            Upload 1–4 of your photos. We'll keep this template's exact look,
-            pose and vibe — and put you in it.
-          </p>
-        </div>
-
-        {!result && (
-          <>
-            <label className="block">
-              <input
-                type="file"
-                accept="image/*"
-                multiple
-                onChange={onPick}
-                className="hidden"
-                disabled={busy}
-              />
-              <div className="border-2 border-dashed border-border rounded-2xl py-6 px-4 flex flex-col items-center gap-2 text-center cursor-pointer hover:bg-secondary/40 transition-colors">
-                <Upload className="size-5 text-muted-foreground" />
-                <span className="text-sm font-semibold">
-                  {files.length > 0
-                    ? `${files.length} photo${files.length > 1 ? "s" : ""} selected`
-                    : "Tap to upload your photos"}
-                </span>
-                <span className="text-[11px] text-muted-foreground">
-                  Up to 4 photos · JPG or PNG
-                </span>
-              </div>
-            </label>
-
-            {previews.length > 0 && (
-              <div className="grid grid-cols-4 gap-2">
-                {previews.map((p, i) => (
-                  <img
-                    key={i}
-                    src={p}
-                    alt=""
-                    className="aspect-square w-full object-cover rounded-lg ring-1 ring-border"
-                  />
-                ))}
-              </div>
-            )}
-
-            {error && (
-              <p className="text-xs text-destructive bg-destructive/10 rounded-lg p-2">
-                {error}
-              </p>
-            )}
-
-            <button
-              onClick={onGenerate}
-              disabled={busy || files.length === 0}
-              className="w-full inline-flex items-center justify-center gap-2 py-3 rounded-2xl bg-foreground text-background text-sm font-semibold disabled:opacity-50"
-            >
-              {busy ? (
-                <>
-                  <Loader2 className="size-4 animate-spin" />
-                  Creating your version…
-                </>
-              ) : (
-                <>
-                  <Sparkles className="size-4" />
-                  Generate
-                </>
-              )}
-            </button>
-            {busy && (
-              <p className="text-[11px] text-center text-muted-foreground">
-                This usually takes 20–60 seconds.
-              </p>
-            )}
-          </>
-        )}
-
-        {result && (
-          <div className="space-y-3">
-            <img
-              src={result}
-              alt="Your version"
-              className="w-full rounded-2xl ring-1 ring-border"
-            />
-            <div className="flex gap-2">
-              <a
-                href={result}
-                download={`${reel.title.replace(/\s+/g, "-").toLowerCase()}.png`}
-                className="flex-1 inline-flex items-center justify-center gap-2 py-3 rounded-2xl bg-foreground text-background text-sm font-semibold"
-              >
-                <Download className="size-4" />
-                Download
-              </a>
-              <button
-                onClick={() => {
-                  setResult(null);
-                  setFiles([]);
-                }}
-                className="flex-1 py-3 rounded-2xl bg-secondary text-foreground text-sm font-semibold"
-              >
-                Try again
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
