@@ -240,12 +240,7 @@ function ReelCard({
       onClick={handleTap}
       className="relative h-dvh w-full snap-start snap-always overflow-hidden bg-black"
     >
-      <img
-        src={reel.img}
-        alt={reel.title}
-        loading={eager ? "eager" : "lazy"}
-        className="absolute inset-0 w-full h-full object-cover"
-      />
+      <PhotoCarousel reel={reel} eager={eager} />
       {reel.audio && (
         /\.(mp4|webm|mov|m4v|ogv)(\?|$)/i.test(reel.audio) ? (
           <video
