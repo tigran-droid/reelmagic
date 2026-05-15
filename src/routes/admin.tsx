@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
-import { Upload, Image as ImageIcon, Music, Loader2, Trash2 } from "lucide-react";
+import { Upload, Image as ImageIcon, Music, Loader2, Trash2, Pencil, X, Check } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 export const Route = createFileRoute("/admin")({
@@ -23,6 +23,13 @@ function Admin() {
   const [audio, setAudio] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editHashtags, setEditHashtags] = useState("");
+  const [editSong, setEditSong] = useState("");
+  const [editImages, setEditImages] = useState<File[]>([]);
+  const [editAudio, setEditAudio] = useState<File | null>(null);
+  const [editBusy, setEditBusy] = useState(false);
   const imgRef = useRef<HTMLInputElement>(null);
   const audRef = useRef<HTMLInputElement>(null);
 
@@ -43,7 +50,10 @@ function Admin() {
       const { error } = await supabase.from("reels").delete().eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-reels"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-reels"] });
+      qc.invalidateQueries({ queryKey: ["feed-reels"] });
+    },
   });
 
   async function uploadFile(bucket: string, file: File) {
@@ -101,6 +111,74 @@ function Admin() {
       setMsg(`Error: ${e.message ?? "upload failed"}`);
     } finally {
       setBusy(false);
+    }
+  }
+
+  type ReelRow = {
+    id: string;
+    title: string;
+    hashtags: string[];
+    song: string | null;
+    image_url: string;
+    image_urls: string[];
+    audio_url: string | null;
+  };
+
+  function startEdit(r: ReelRow) {
+    setEditingId(r.id);
+    setEditTitle(r.title);
+    setEditHashtags(r.hashtags.join(" "));
+    setEditSong(r.song ?? "");
+    setEditImages([]);
+    setEditAudio(null);
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setEditImages([]);
+    setEditAudio(null);
+  }
+
+  async function saveEdit(id: string) {
+    setEditBusy(true);
+    try {
+      const tags = editHashtags
+        .split(/[\s,]+/)
+        .map((t) => t.trim())
+        .filter(Boolean)
+        .map((t) => (t.startsWith("#") ? t : `#${t}`));
+      const update: {
+        title: string;
+        hashtags: string[];
+        song: string | null;
+        image_urls?: string[];
+        image_url?: string;
+        audio_url?: string;
+      } = {
+        title: editTitle.trim(),
+        hashtags: tags,
+        song: editSong.trim() || null,
+      };
+      if (editImages.length > 0) {
+        const image_urls = await Promise.all(
+          editImages.map((f) => uploadFile("reel-images", f)),
+        );
+        update.image_urls = image_urls;
+        update.image_url = image_urls[0];
+      }
+      if (editAudio) {
+        update.audio_url = await uploadFile("reel-audio", editAudio);
+      }
+      const { error } = await supabase.from("reels").update(update).eq("id", id);
+      if (error) throw error;
+      cancelEdit();
+      qc.invalidateQueries({ queryKey: ["admin-reels"] });
+      qc.invalidateQueries({ queryKey: ["feed-reels"] });
+    } catch (err: unknown) {
+      const e = err as { message?: string };
+      alert(`Error: ${e.message ?? "update failed"}`);
+    } finally {
+      setEditBusy(false);
     }
   }
 
@@ -199,21 +277,105 @@ function Admin() {
         <h2 className="text-lg font-semibold mt-10 mb-3">Existing reels</h2>
         <div className="space-y-2">
           {reels.data?.map((r) => (
-            <div key={r.id} className="flex items-center gap-3 bg-card border border-border rounded-xl p-2">
-              <img src={r.image_url} alt={r.title} className="size-14 rounded-lg object-cover" />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold truncate">{r.title}</p>
-                <p className="text-xs text-muted-foreground truncate">
-                  {r.hashtags.join(" ")} {r.song && `· ${r.song}`}
-                </p>
-              </div>
-              <button
-                onClick={() => del.mutate(r.id)}
-                className="p-2 text-muted-foreground hover:text-destructive"
-                aria-label="Delete reel"
-              >
-                <Trash2 className="size-4" />
-              </button>
+            <div key={r.id} className="bg-card border border-border rounded-xl p-2">
+              {editingId === r.id ? (
+                <div className="space-y-2 p-2">
+                  <Field label="Title">
+                    <input
+                      value={editTitle}
+                      onChange={(e) => setEditTitle(e.target.value)}
+                      className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm"
+                    />
+                  </Field>
+                  <Field label="Hashtags">
+                    <input
+                      value={editHashtags}
+                      onChange={(e) => setEditHashtags(e.target.value)}
+                      className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm"
+                    />
+                  </Field>
+                  <Field label="Song">
+                    <input
+                      value={editSong}
+                      onChange={(e) => setEditSong(e.target.value)}
+                      className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm"
+                    />
+                  </Field>
+                  <Field label="Replace photos (optional — leave empty to keep current)">
+                    <label className="flex items-center gap-2 bg-background border border-dashed border-border rounded-lg px-3 py-2 text-sm cursor-pointer">
+                      <ImageIcon className="size-4" />
+                      <span className="truncate flex-1">
+                        {editImages.length === 0
+                          ? "Keep current photos"
+                          : `${editImages.length} new photo${editImages.length === 1 ? "" : "s"}`}
+                      </span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        className="hidden"
+                        onChange={(e) => setEditImages(Array.from(e.target.files ?? []))}
+                      />
+                    </label>
+                  </Field>
+                  <Field label="Replace music (optional)">
+                    <label className="flex items-center gap-2 bg-background border border-dashed border-border rounded-lg px-3 py-2 text-sm cursor-pointer">
+                      <Music className="size-4" />
+                      <span className="truncate flex-1">
+                        {editAudio ? editAudio.name : "Keep current music"}
+                      </span>
+                      <input
+                        type="file"
+                        accept="audio/*,video/*"
+                        className="hidden"
+                        onChange={(e) => setEditAudio(e.target.files?.[0] ?? null)}
+                      />
+                    </label>
+                  </Field>
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      onClick={() => saveEdit(r.id)}
+                      disabled={editBusy}
+                      className="flex-1 inline-flex items-center justify-center gap-1.5 bg-brand text-white text-sm font-semibold rounded-lg py-2 disabled:opacity-60"
+                    >
+                      {editBusy ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
+                      Save
+                    </button>
+                    <button
+                      onClick={cancelEdit}
+                      disabled={editBusy}
+                      className="flex-1 inline-flex items-center justify-center gap-1.5 bg-muted text-foreground text-sm font-semibold rounded-lg py-2"
+                    >
+                      <X className="size-4" />
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <img src={r.image_url} alt={r.title} className="size-14 rounded-lg object-cover" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold truncate">{r.title}</p>
+                    <p className="text-xs text-muted-foreground truncate">
+                      {r.hashtags.join(" ")} {r.song && `· ${r.song}`}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => startEdit(r as ReelRow)}
+                    className="p-2 text-muted-foreground hover:text-foreground"
+                    aria-label="Edit reel"
+                  >
+                    <Pencil className="size-4" />
+                  </button>
+                  <button
+                    onClick={() => del.mutate(r.id)}
+                    className="p-2 text-muted-foreground hover:text-destructive"
+                    aria-label="Delete reel"
+                  >
+                    <Trash2 className="size-4" />
+                  </button>
+                </div>
+              )}
             </div>
           ))}
           {reels.data?.length === 0 && (

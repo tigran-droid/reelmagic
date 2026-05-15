@@ -1,0 +1,1 @@
+CREATE POLICY "Anyone can update reels" ON public.reels FOR UPDATE USING (true) WITH CHECK (true);
