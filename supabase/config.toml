@@ -1,1 +1,4 @@
 project_id = "iuqainprrnjrhrfendsk"
+
+[functions.generate-from-template]
+verify_jwt = false
