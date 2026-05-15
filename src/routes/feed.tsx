@@ -9,16 +9,6 @@ import glam from "@/assets/reel-glam.jpg";
 import anime from "@/assets/reel-anime.jpg";
 import cinema from "@/assets/reel-cinema.jpg";
 
-// Track the currently playing audio across all reels so only one plays at a time.
-let currentPlaying: HTMLMediaElement | null = null;
-function playExclusive(audio: HTMLMediaElement) {
-  if (currentPlaying && currentPlaying !== audio) {
-    currentPlaying.pause();
-  }
-  currentPlaying = audio;
-  return audio.play();
-}
-
 export const Route = createFileRoute("/feed")({
   head: () => ({
     meta: [
@@ -93,6 +83,10 @@ const regionalReels: Reel[] = [
 
 function Feed() {
   const [tab, setTab] = useState<"global" | "regional">("global");
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [needsTapIndex, setNeedsTapIndex] = useState<number | null>(null);
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const mediaRefs = useRef<(HTMLMediaElement | null)[]>([]);
 
   const dbReels = useQuery({
     queryKey: ["feed-reels"],
@@ -126,14 +120,95 @@ function Feed() {
       ? [...(dbReels.data ?? []), ...globalReels]
       : regionalReels;
 
+  useEffect(() => {
+    setActiveIndex(0);
+    setNeedsTapIndex(null);
+    scrollerRef.current?.scrollTo({ top: 0, behavior: "auto" });
+  }, [tab]);
+
+  useEffect(() => {
+    mediaRefs.current = mediaRefs.current.slice(0, reels.length);
+  }, [reels.length]);
+
+  useEffect(() => {
+    mediaRefs.current.forEach((media, index) => {
+      if (!media || index === activeIndex) return;
+      media.pause();
+      media.currentTime = 0;
+    });
+
+    const activeMedia = mediaRefs.current[activeIndex];
+    if (!activeMedia) return;
+
+    activeMedia.currentTime = 0;
+    activeMedia.play().then(() => {
+      setNeedsTapIndex((current) => (current === activeIndex ? null : current));
+    }).catch(() => {
+      setNeedsTapIndex(activeIndex);
+    });
+  }, [activeIndex, reels.length]);
+
+  useEffect(() => {
+    return () => {
+      mediaRefs.current.forEach((media) => media?.pause());
+    };
+  }, []);
+
+  const handleScroll = () => {
+    const el = scrollerRef.current;
+    if (!el || reels.length === 0) return;
+    const nextIndex = Math.round(el.scrollTop / el.clientHeight);
+    const clamped = Math.max(0, Math.min(reels.length - 1, nextIndex));
+    if (clamped !== activeIndex) {
+      setActiveIndex(clamped);
+      setNeedsTapIndex(null);
+    }
+  };
+
+  const handleToggleAudio = (index: number) => {
+    const media = mediaRefs.current[index];
+    if (!media) return;
+
+    mediaRefs.current.forEach((item, itemIndex) => {
+      if (!item || itemIndex === index) return;
+      item.pause();
+      item.currentTime = 0;
+    });
+
+    if (media.paused) {
+      media.currentTime = 0;
+      media.play().then(() => {
+        setActiveIndex(index);
+        setNeedsTapIndex(null);
+      }).catch(() => {
+        setNeedsTapIndex(index);
+      });
+      return;
+    }
+
+    media.pause();
+    setNeedsTapIndex(index);
+  };
+
   return (
     <MobileFrame immersive>
       <div
+        ref={scrollerRef}
         key={tab}
+        onScroll={handleScroll}
         className="h-dvh overflow-y-scroll snap-y snap-mandatory no-scrollbar"
       >
         {reels.map((r, i) => (
-          <ReelCard key={i} reel={r} eager={i === 0}>
+          <ReelCard
+            key={`${r.cover}-${i}`}
+            reel={r}
+            eager={i === 0}
+            needsTap={needsTapIndex === i}
+            onToggleAudio={() => handleToggleAudio(i)}
+            setMediaRef={(node) => {
+              mediaRefs.current[i] = node;
+            }}
+          >
             <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-black/50" />
 
             {/* Top tabs */}
@@ -204,65 +279,28 @@ function Feed() {
 function ReelCard({
   reel,
   eager,
+  needsTap,
+  onToggleAudio,
+  setMediaRef,
   children,
 }: {
   reel: Reel;
   eager: boolean;
+  needsTap: boolean;
+  onToggleAudio: () => void;
+  setMediaRef: (node: HTMLMediaElement | null) => void;
   children: React.ReactNode;
 }) {
-  const ref = useRef<HTMLElement>(null);
-  const audioRef = useRef<HTMLMediaElement>(null);
-  const [needsTap, setNeedsTap] = useState(false);
-
-  useEffect(() => {
-    const el = ref.current;
-    const audio = audioRef.current;
-    if (!el) return;
-    const io = new IntersectionObserver(
-      ([entry]) => {
-        if (!audio) return;
-        if (entry.isIntersecting && entry.intersectionRatio > 0.6) {
-          audio.currentTime = 0;
-          playExclusive(audio).catch(() => setNeedsTap(true));
-        } else {
-          audio.pause();
-          if (currentPlaying === audio) currentPlaying = null;
-        }
-      },
-      { threshold: [0, 0.6, 1] },
-    );
-    io.observe(el);
-    return () => {
-      io.disconnect();
-      if (audio) {
-        audio.pause();
-        if (currentPlaying === audio) currentPlaying = null;
-      }
-    };
-  }, []);
-
-  const handleTap = () => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    if (audio.paused) {
-      playExclusive(audio).then(() => setNeedsTap(false)).catch(() => {});
-    } else {
-      audio.pause();
-      if (currentPlaying === audio) currentPlaying = null;
-    }
-  };
-
   return (
     <article
-      ref={ref}
-      onClick={handleTap}
+      onClick={onToggleAudio}
       className="relative h-dvh w-full snap-start snap-always overflow-hidden bg-black"
     >
       <PhotoCarousel reel={reel} eager={eager} />
       {reel.audio && (
         /\.(mp4|webm|mov|m4v|ogv)(\?|$)/i.test(reel.audio) ? (
           <video
-            ref={audioRef as React.RefObject<HTMLVideoElement>}
+            ref={setMediaRef as React.Ref<HTMLVideoElement>}
             src={reel.audio}
             loop
             preload="auto"
@@ -271,7 +309,7 @@ function ReelCard({
           />
         ) : (
           <audio
-            ref={audioRef as React.RefObject<HTMLAudioElement>}
+            ref={setMediaRef as React.Ref<HTMLAudioElement>}
             src={reel.audio}
             loop
             preload="auto"
