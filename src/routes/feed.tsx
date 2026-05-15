@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { MobileFrame } from "@/components/MobileFrame";
-import { Heart, MessageCircle, Send, Bookmark, Sparkles } from "lucide-react";
+import { Heart, MessageCircle, Send, Bookmark, Sparkles, X, Upload, Loader2, Download } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
+import { generateFromTemplate } from "@/lib/template-generate.functions";
 import feed1 from "@/assets/feed-1.jpg";
 import glam from "@/assets/reel-glam.jpg";
 import anime from "@/assets/reel-anime.jpg";
@@ -85,6 +87,7 @@ function Feed() {
   const [tab, setTab] = useState<"global" | "regional">("global");
   const [activeIndex, setActiveIndex] = useState(0);
   const [needsTapIndex, setNeedsTapIndex] = useState<number | null>(null);
+  const [createForReel, setCreateForReel] = useState<Reel | null>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -260,9 +263,11 @@ function Feed() {
               <div className="flex items-center justify-between gap-3 pt-1.5">
                 <button
                   type="button"
-                  disabled
-                  aria-disabled="true"
-                  className="inline-flex items-center gap-2 pl-4 pr-5 py-2.5 rounded-2xl bg-white text-black text-sm font-semibold shadow-lg shadow-black/20 opacity-70 cursor-not-allowed"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setCreateForReel(r);
+                  }}
+                  className="inline-flex items-center gap-2 pl-4 pr-5 py-2.5 rounded-2xl bg-white text-black text-sm font-semibold shadow-lg shadow-black/20 active:scale-95 transition-transform"
                 >
                   <Sparkles className="size-4" />
                   Create yours
@@ -283,6 +288,12 @@ function Feed() {
           </ReelCard>
         ))}
       </div>
+      {createForReel && (
+        <CreateYoursModal
+          reel={createForReel}
+          onClose={() => setCreateForReel(null)}
+        />
+      )}
     </MobileFrame>
   );
 }
