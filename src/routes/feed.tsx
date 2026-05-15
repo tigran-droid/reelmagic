@@ -9,6 +9,16 @@ import glam from "@/assets/reel-glam.jpg";
 import anime from "@/assets/reel-anime.jpg";
 import cinema from "@/assets/reel-cinema.jpg";
 
+// Track the currently playing audio across all reels so only one plays at a time.
+let currentPlaying: HTMLMediaElement | null = null;
+function playExclusive(audio: HTMLMediaElement) {
+  if (currentPlaying && currentPlaying !== audio) {
+    currentPlaying.pause();
+  }
+  currentPlaying = audio;
+  return audio.play();
+}
+
 export const Route = createFileRoute("/feed")({
   head: () => ({
     meta: [
@@ -213,24 +223,32 @@ function ReelCard({
         if (!audio) return;
         if (entry.isIntersecting && entry.intersectionRatio > 0.6) {
           audio.currentTime = 0;
-          audio.play().catch(() => setNeedsTap(true));
+          playExclusive(audio).catch(() => setNeedsTap(true));
         } else {
           audio.pause();
+          if (currentPlaying === audio) currentPlaying = null;
         }
       },
       { threshold: [0, 0.6, 1] },
     );
     io.observe(el);
-    return () => io.disconnect();
+    return () => {
+      io.disconnect();
+      if (audio) {
+        audio.pause();
+        if (currentPlaying === audio) currentPlaying = null;
+      }
+    };
   }, []);
 
   const handleTap = () => {
     const audio = audioRef.current;
     if (!audio) return;
     if (audio.paused) {
-      audio.play().then(() => setNeedsTap(false)).catch(() => {});
+      playExclusive(audio).then(() => setNeedsTap(false)).catch(() => {});
     } else {
       audio.pause();
+      if (currentPlaying === audio) currentPlaying = null;
     }
   };
 
