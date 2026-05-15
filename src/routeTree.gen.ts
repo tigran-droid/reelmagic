@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as ToolsRouteImport } from './routes/tools'
 import { Route as PhotoshopRouteImport } from './routes/photoshop'
 import { Route as FeedRouteImport } from './routes/feed'
+import { Route as CreateRouteImport } from './routes/create'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 
@@ -30,6 +31,11 @@ const FeedRoute = FeedRouteImport.update({
   path: '/feed',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CreateRoute = CreateRouteImport.update({
+  id: '/create',
+  path: '/create',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminRoute = AdminRouteImport.update({
   id: '/admin',
   path: '/admin',
@@ -44,6 +50,7 @@ const IndexRoute = IndexRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
+  '/create': typeof CreateRoute
   '/feed': typeof FeedRoute
   '/photoshop': typeof PhotoshopRoute
   '/tools': typeof ToolsRoute
@@ -51,6 +58,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
+  '/create': typeof CreateRoute
   '/feed': typeof FeedRoute
   '/photoshop': typeof PhotoshopRoute
   '/tools': typeof ToolsRoute
@@ -59,21 +67,30 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
+  '/create': typeof CreateRoute
   '/feed': typeof FeedRoute
   '/photoshop': typeof PhotoshopRoute
   '/tools': typeof ToolsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/admin' | '/feed' | '/photoshop' | '/tools'
+  fullPaths: '/' | '/admin' | '/create' | '/feed' | '/photoshop' | '/tools'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/admin' | '/feed' | '/photoshop' | '/tools'
-  id: '__root__' | '/' | '/admin' | '/feed' | '/photoshop' | '/tools'
+  to: '/' | '/admin' | '/create' | '/feed' | '/photoshop' | '/tools'
+  id:
+    | '__root__'
+    | '/'
+    | '/admin'
+    | '/create'
+    | '/feed'
+    | '/photoshop'
+    | '/tools'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRoute
+  CreateRoute: typeof CreateRoute
   FeedRoute: typeof FeedRoute
   PhotoshopRoute: typeof PhotoshopRoute
   ToolsRoute: typeof ToolsRoute
@@ -102,6 +119,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FeedRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/create': {
+      id: '/create'
+      path: '/create'
+      fullPath: '/create'
+      preLoaderRoute: typeof CreateRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin': {
       id: '/admin'
       path: '/admin'
@@ -122,6 +146,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRoute,
+  CreateRoute: CreateRoute,
   FeedRoute: FeedRoute,
   PhotoshopRoute: PhotoshopRoute,
   ToolsRoute: ToolsRoute,

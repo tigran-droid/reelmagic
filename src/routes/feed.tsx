@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { MobileFrame } from "@/components/MobileFrame";
-import { Heart, MessageCircle, Send, Bookmark, Sparkles, X, Upload, Loader2, Download } from "lucide-react";
+import { Heart, MessageCircle, Send, Bookmark, Sparkles } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import feed1 from "@/assets/feed-1.jpg";
@@ -85,9 +85,26 @@ function Feed() {
   const [tab, setTab] = useState<"global" | "regional">("global");
   const [activeIndex, setActiveIndex] = useState(0);
   const [needsTapIndex, setNeedsTapIndex] = useState<number | null>(null);
-  const [createForReel, setCreateForReel] = useState<Reel | null>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const navigate = useNavigate();
+
+  const startCreate = (reel: Reel) => {
+    try {
+      sessionStorage.setItem(
+        "create:draft",
+        JSON.stringify({
+          images: reel.images,
+          cover: reel.cover,
+          title: reel.title,
+          hashtags: reel.hashtags,
+        }),
+      );
+    } catch {
+      // ignore storage errors
+    }
+    navigate({ to: "/create" });
+  };
 
   const dbReels = useQuery({
     queryKey: ["feed-reels"],
@@ -263,7 +280,7 @@ function Feed() {
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
-                    setCreateForReel(r);
+                    startCreate(r);
                   }}
                   className="inline-flex items-center gap-2 pl-4 pr-5 py-2.5 rounded-2xl bg-white text-black text-sm font-semibold shadow-lg shadow-black/20 active:scale-95 transition-transform"
                 >
@@ -286,12 +303,6 @@ function Feed() {
           </ReelCard>
         ))}
       </div>
-      {createForReel && (
-        <CreateYoursModal
-          reel={createForReel}
-          onClose={() => setCreateForReel(null)}
-        />
-      )}
     </MobileFrame>
   );
 }
