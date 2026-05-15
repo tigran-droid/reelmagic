@@ -20,7 +20,7 @@ export const Route = createFileRoute("/feed")({
 });
 
 type Reel = {
-  img: string;
+  images: string[];
   cover: string;
   title: string;
   hashtags: string[];
@@ -32,7 +32,7 @@ type Reel = {
 
 const globalReels: Reel[] = [
   {
-    img: feed1,
+    images: [feed1],
     cover: feed1,
     title: "Neon city nights",
     hashtags: ["#cinematic", "#neon", "#aiart"],
@@ -41,7 +41,7 @@ const globalReels: Reel[] = [
     comments: "432",
   },
   {
-    img: glam,
+    images: [glam],
     cover: glam,
     title: "Glam hour glow up",
     hashtags: ["#glam", "#portrait", "#studio"],
@@ -50,7 +50,7 @@ const globalReels: Reel[] = [
     comments: "211",
   },
   {
-    img: anime,
+    images: [anime],
     cover: anime,
     title: "Shibuya at 2am",
     hashtags: ["#anime", "#tokyo", "#night"],
@@ -62,7 +62,7 @@ const globalReels: Reel[] = [
 
 const regionalReels: Reel[] = [
   {
-    img: cinema,
+    images: [cinema],
     cover: cinema,
     title: "Golden hour, every hour",
     hashtags: ["#local", "#goldenhour", "#film"],
@@ -71,7 +71,7 @@ const regionalReels: Reel[] = [
     comments: "98",
   },
   {
-    img: glam,
+    images: [glam],
     cover: glam,
     title: "Hometown glow",
     hashtags: ["#regional", "#portrait"],
@@ -92,16 +92,22 @@ function Feed() {
         .select("*")
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return data.map<Reel>((r) => ({
-        img: r.image_url,
-        cover: r.image_url,
+      return data.map<Reel>((r) => {
+        const imgs =
+          r.image_urls && r.image_urls.length > 0
+            ? r.image_urls
+            : [r.image_url];
+        return ({
+        images: imgs,
+        cover: imgs[0],
         title: r.title,
         hashtags: r.hashtags ?? [],
         song: r.song ?? "Original audio",
         likes: "0",
         comments: "0",
         audio: r.audio_url,
-      }));
+        });
+      });
     },
   });
 
