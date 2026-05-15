@@ -101,16 +101,16 @@ function Feed() {
           r.image_urls && r.image_urls.length > 0
             ? r.image_urls
             : [r.image_url];
-        return ({
-        images: imgs,
-        cover: imgs[0],
-        title: r.title,
-        hashtags: r.hashtags ?? [],
-        song: r.song ?? "Original audio",
-        likes: "0",
-        comments: "0",
-        audio: r.audio_url,
-        });
+        return {
+          images: imgs,
+          cover: imgs[0],
+          title: r.title,
+          hashtags: r.hashtags ?? [],
+          song: r.song ?? "Original audio",
+          likes: "0",
+          comments: "0",
+          audio: r.audio_url,
+        };
       });
     },
   });
