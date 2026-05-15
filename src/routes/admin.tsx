@@ -147,7 +147,14 @@ function Admin() {
         .map((t) => t.trim())
         .filter(Boolean)
         .map((t) => (t.startsWith("#") ? t : `#${t}`));
-      const update: Record<string, unknown> = {
+      const update: {
+        title: string;
+        hashtags: string[];
+        song: string | null;
+        image_urls?: string[];
+        image_url?: string;
+        audio_url?: string;
+      } = {
         title: editTitle.trim(),
         hashtags: tags,
         song: editSong.trim() || null,
