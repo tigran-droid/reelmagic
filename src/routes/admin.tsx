@@ -146,10 +146,10 @@ function Admin() {
           />
 
           <FilePick
-            label="Music (audio file, optional)"
+            label="Music (audio or video file — only audio track is used)"
             icon={<Music className="size-4" />}
             file={audio}
-            accept="audio/*"
+            accept="audio/*,video/*"
             onPick={setAudio}
             inputRef={audRef}
           />
