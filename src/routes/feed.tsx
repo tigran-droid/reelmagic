@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { MobileFrame } from "@/components/MobileFrame";
 import { Heart, MessageCircle, Send, Bookmark, Sparkles } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import feed1 from "@/assets/feed-1.jpg";
 import glam from "@/assets/reel-glam.jpg";
 import anime from "@/assets/reel-anime.jpg";
@@ -25,6 +27,7 @@ type Reel = {
   song: string;
   likes: string;
   comments: string;
+  audio?: string | null;
 };
 
 const globalReels: Reel[] = [
@@ -80,7 +83,32 @@ const regionalReels: Reel[] = [
 
 function Feed() {
   const [tab, setTab] = useState<"global" | "regional">("global");
-  const reels = tab === "global" ? globalReels : regionalReels;
+
+  const dbReels = useQuery({
+    queryKey: ["feed-reels"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("reels")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data.map<Reel>((r) => ({
+        img: r.image_url,
+        cover: r.image_url,
+        title: r.title,
+        hashtags: r.hashtags ?? [],
+        song: r.song ?? "Original audio",
+        likes: "0",
+        comments: "0",
+        audio: r.audio_url,
+      }));
+    },
+  });
+
+  const reels =
+    tab === "global"
+      ? [...(dbReels.data ?? []), ...globalReels]
+      : regionalReels;
 
   return (
     <MobileFrame immersive>
@@ -89,16 +117,7 @@ function Feed() {
         className="h-dvh overflow-y-scroll snap-y snap-mandatory no-scrollbar"
       >
         {reels.map((r, i) => (
-          <article
-            key={i}
-            className="relative h-dvh w-full snap-start snap-always overflow-hidden bg-black"
-          >
-            <img
-              src={r.img}
-              alt={r.title}
-              loading={i === 0 ? "eager" : "lazy"}
-              className="absolute inset-0 w-full h-full object-cover"
-            />
+          <ReelCard key={i} reel={r} eager={i === 0}>
             <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-black/50" />
 
             {/* Top tabs */}
@@ -157,10 +176,61 @@ function Feed() {
                 </div>
               </div>
             </div>
-          </article>
+          </ReelCard>
         ))}
       </div>
     </MobileFrame>
+  );
+}
+
+function ReelCard({
+  reel,
+  eager,
+  children,
+}: {
+  reel: Reel;
+  eager: boolean;
+  children: React.ReactNode;
+}) {
+  const ref = useRef<HTMLElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    const audio = audioRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (!audio) return;
+        if (entry.isIntersecting && entry.intersectionRatio > 0.6) {
+          audio.currentTime = 0;
+          audio.play().catch(() => {});
+        } else {
+          audio.pause();
+        }
+      },
+      { threshold: [0, 0.6, 1] },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
+  return (
+    <article
+      ref={ref}
+      className="relative h-dvh w-full snap-start snap-always overflow-hidden bg-black"
+    >
+      <img
+        src={reel.img}
+        alt={reel.title}
+        loading={eager ? "eager" : "lazy"}
+        className="absolute inset-0 w-full h-full object-cover"
+      />
+      {reel.audio && (
+        <audio ref={audioRef} src={reel.audio} loop preload="auto" playsInline />
+      )}
+      {children}
+    </article>
   );
 }
 
