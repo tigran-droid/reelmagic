@@ -193,7 +193,7 @@ function ReelCard({
   children: React.ReactNode;
 }) {
   const ref = useRef<HTMLElement>(null);
-  const audioRef = useRef<HTMLAudioElement>(null);
+  const audioRef = useRef<HTMLMediaElement>(null);
 
   useEffect(() => {
     const el = ref.current;
@@ -227,7 +227,23 @@ function ReelCard({
         className="absolute inset-0 w-full h-full object-cover"
       />
       {reel.audio && (
-        <audio ref={audioRef} src={reel.audio} loop preload="auto" playsInline />
+        /\.(mp4|webm|mov|m4v|ogv)(\?|$)/i.test(reel.audio) ? (
+          <video
+            ref={audioRef as React.RefObject<HTMLVideoElement>}
+            src={reel.audio}
+            loop
+            preload="auto"
+            playsInline
+            className="hidden"
+          />
+        ) : (
+          <audio
+            ref={audioRef as React.RefObject<HTMLAudioElement>}
+            src={reel.audio}
+            loop
+            preload="auto"
+          />
+        )
       )}
       {children}
     </article>
