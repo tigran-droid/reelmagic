@@ -14,7 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      reels: {
+        Row: {
+          audio_url: string | null
+          created_at: string
+          hashtags: string[]
+          id: string
+          image_url: string
+          song: string | null
+          title: string
+        }
+        Insert: {
+          audio_url?: string | null
+          created_at?: string
+          hashtags?: string[]
+          id?: string
+          image_url: string
+          song?: string | null
+          title: string
+        }
+        Update: {
+          audio_url?: string | null
+          created_at?: string
+          hashtags?: string[]
+          id?: string
+          image_url?: string
+          song?: string | null
+          title?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
