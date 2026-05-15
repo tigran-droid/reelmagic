@@ -280,3 +280,61 @@ function Action({ icon, label }: { icon: React.ReactNode; label: string }) {
     </button>
   );
 }
+
+function PhotoCarousel({ reel, eager }: { reel: Reel; eager: boolean }) {
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const [index, setIndex] = useState(0);
+  const count = reel.images.length;
+
+  // Auto-advance every 2.5s if more than one photo
+  useEffect(() => {
+    if (count <= 1) return;
+    const id = setInterval(() => {
+      const el = scrollerRef.current;
+      if (!el) return;
+      const next = (index + 1) % count;
+      el.scrollTo({ left: next * el.clientWidth, behavior: "smooth" });
+    }, 2500);
+    return () => clearInterval(id);
+  }, [index, count]);
+
+  const onScroll = () => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    const i = Math.round(el.scrollLeft / el.clientWidth);
+    if (i !== index) setIndex(i);
+  };
+
+  return (
+    <>
+      <div
+        ref={scrollerRef}
+        onScroll={onScroll}
+        onClick={(e) => e.stopPropagation()}
+        className="absolute inset-0 flex overflow-x-auto overflow-y-hidden snap-x snap-mandatory no-scrollbar"
+      >
+        {reel.images.map((src, i) => (
+          <img
+            key={i}
+            src={src}
+            alt={reel.title}
+            loading={eager && i === 0 ? "eager" : "lazy"}
+            className="w-full h-full flex-shrink-0 snap-center object-cover"
+          />
+        ))}
+      </div>
+      {count > 1 && (
+        <div className="absolute bottom-[152px] left-0 right-0 flex justify-center gap-1.5 pointer-events-none z-10">
+          {reel.images.map((_, i) => (
+            <span
+              key={i}
+              className={`h-1.5 rounded-full transition-all ${
+                i === index ? "w-5 bg-white" : "w-1.5 bg-white/50"
+              }`}
+            />
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
