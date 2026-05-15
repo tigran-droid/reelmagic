@@ -21,6 +21,7 @@ export type Database = {
           hashtags: string[]
           id: string
           image_url: string
+          image_urls: string[]
           song: string | null
           title: string
         }
@@ -30,6 +31,7 @@ export type Database = {
           hashtags?: string[]
           id?: string
           image_url: string
+          image_urls?: string[]
           song?: string | null
           title: string
         }
@@ -39,6 +41,7 @@ export type Database = {
           hashtags?: string[]
           id?: string
           image_url?: string
+          image_urls?: string[]
           song?: string | null
           title?: string
         }

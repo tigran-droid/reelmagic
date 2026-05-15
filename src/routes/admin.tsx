@@ -19,7 +19,7 @@ function Admin() {
   const [title, setTitle] = useState("");
   const [hashtags, setHashtags] = useState("");
   const [song, setSong] = useState("");
-  const [image, setImage] = useState<File | null>(null);
+  const [images, setImages] = useState<File[]>([]);
   const [audio, setAudio] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -61,13 +61,16 @@ function Admin() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMsg(null);
-    if (!image || !title.trim()) {
-      setMsg("Title and photo are required.");
+    if (images.length === 0 || !title.trim()) {
+      setMsg("Title and at least one photo are required.");
       return;
     }
     setBusy(true);
     try {
-      const image_url = await uploadFile("reel-images", image);
+      const image_urls = await Promise.all(
+        images.map((f) => uploadFile("reel-images", f)),
+      );
+      const image_url = image_urls[0];
       const audio_url = audio ? await uploadFile("reel-audio", audio) : null;
       const tags = hashtags
         .split(/[\s,]+/)
@@ -79,13 +82,14 @@ function Admin() {
         hashtags: tags,
         song: song.trim() || null,
         image_url,
+        image_urls,
         audio_url,
       });
       if (error) throw error;
       setTitle("");
       setHashtags("");
       setSong("");
-      setImage(null);
+      setImages([]);
       setAudio(null);
       if (imgRef.current) imgRef.current.value = "";
       if (audRef.current) audRef.current.value = "";
@@ -136,14 +140,40 @@ function Admin() {
             />
           </Field>
 
-          <FilePick
-            label="Photo"
-            icon={<ImageIcon className="size-4" />}
-            file={image}
-            accept="image/*"
-            onPick={setImage}
-            inputRef={imgRef}
-          />
+          <Field label="Photos (pick one or more — swipeable in the reel)">
+            <label className="flex items-center gap-2 bg-background border border-dashed border-border rounded-lg px-3 py-3 text-sm cursor-pointer">
+              <ImageIcon className="size-4" />
+              <span className="truncate flex-1">
+                {images.length === 0
+                  ? "Choose photos…"
+                  : `${images.length} photo${images.length === 1 ? "" : "s"} selected`}
+              </span>
+              <input
+                ref={imgRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={(e) => setImages(Array.from(e.target.files ?? []))}
+              />
+            </label>
+            {images.length > 0 && (
+              <div className="flex gap-2 mt-2 overflow-x-auto">
+                {images.map((f, i) => (
+                  <div key={i} className="relative shrink-0">
+                    <img
+                      src={URL.createObjectURL(f)}
+                      alt=""
+                      className="size-16 rounded-lg object-cover border border-border"
+                    />
+                    <span className="absolute -top-1 -left-1 bg-brand text-white text-[10px] font-bold rounded-full size-4 flex items-center justify-center">
+                      {i + 1}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Field>
 
           <FilePick
             label="Music (audio or video file — only audio track is used)"
