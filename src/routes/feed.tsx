@@ -9,16 +9,6 @@ import glam from "@/assets/reel-glam.jpg";
 import anime from "@/assets/reel-anime.jpg";
 import cinema from "@/assets/reel-cinema.jpg";
 
-// Track the currently playing audio across all reels so only one plays at a time.
-let currentPlaying: HTMLMediaElement | null = null;
-function playExclusive(audio: HTMLMediaElement) {
-  if (currentPlaying && currentPlaying !== audio) {
-    currentPlaying.pause();
-  }
-  currentPlaying = audio;
-  return audio.play();
-}
-
 export const Route = createFileRoute("/feed")({
   head: () => ({
     meta: [
@@ -93,6 +83,10 @@ const regionalReels: Reel[] = [
 
 function Feed() {
   const [tab, setTab] = useState<"global" | "regional">("global");
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [needsTapIndex, setNeedsTapIndex] = useState<number | null>(null);
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const dbReels = useQuery({
     queryKey: ["feed-reels"],
@@ -107,16 +101,16 @@ function Feed() {
           r.image_urls && r.image_urls.length > 0
             ? r.image_urls
             : [r.image_url];
-        return ({
-        images: imgs,
-        cover: imgs[0],
-        title: r.title,
-        hashtags: r.hashtags ?? [],
-        song: r.song ?? "Original audio",
-        likes: "0",
-        comments: "0",
-        audio: r.audio_url,
-        });
+        return {
+          images: imgs,
+          cover: imgs[0],
+          title: r.title,
+          hashtags: r.hashtags ?? [],
+          song: r.song ?? "Original audio",
+          likes: "0",
+          comments: "0",
+          audio: r.audio_url,
+        };
       });
     },
   });
@@ -125,15 +119,107 @@ function Feed() {
     tab === "global"
       ? [...(dbReels.data ?? []), ...globalReels]
       : regionalReels;
+  const activeAudioUrl = reels[activeIndex]?.audio ?? null;
+
+  useEffect(() => {
+    setActiveIndex(0);
+    setNeedsTapIndex(null);
+    scrollerRef.current?.scrollTo({ top: 0, behavior: "auto" });
+  }, [tab]);
+
+  useEffect(() => {
+    const audioUrl = activeAudioUrl;
+
+    if (!audioUrl) {
+      audioRef.current?.pause();
+      audioRef.current = null;
+      return;
+    }
+
+    const existing = audioRef.current;
+    if (existing) {
+      existing.pause();
+      existing.currentTime = 0;
+    }
+
+    const player = new Audio(audioUrl);
+    player.loop = true;
+    player.preload = "auto";
+    audioRef.current = player;
+
+    player.play().then(() => {
+      setNeedsTapIndex((current) => (current === activeIndex ? null : current));
+    }).catch(() => {
+      setNeedsTapIndex(activeIndex);
+    });
+
+    return () => {
+      player.pause();
+      player.currentTime = 0;
+      if (audioRef.current === player) {
+        audioRef.current = null;
+      }
+    };
+  }, [activeAudioUrl, activeIndex, reels.length]);
+
+  useEffect(() => {
+    return () => {
+      audioRef.current?.pause();
+      audioRef.current = null;
+    };
+  }, []);
+
+  const handleScroll = () => {
+    const el = scrollerRef.current;
+    if (!el || reels.length === 0) return;
+    const nextIndex = Math.round(el.scrollTop / el.clientHeight);
+    const clamped = Math.max(0, Math.min(reels.length - 1, nextIndex));
+    if (clamped !== activeIndex) {
+      setActiveIndex(clamped);
+      setNeedsTapIndex(null);
+    }
+  };
+
+  const handleToggleAudio = (index: number) => {
+    const currentAudio = audioRef.current;
+    if (index !== activeIndex) {
+      setActiveIndex(index);
+      setNeedsTapIndex(null);
+      return;
+    }
+
+    if (!currentAudio) return;
+
+    if (currentAudio.paused) {
+      currentAudio.currentTime = 0;
+      currentAudio.play().then(() => {
+        setNeedsTapIndex(null);
+      }).catch(() => {
+        setNeedsTapIndex(index);
+      });
+      return;
+    }
+
+    currentAudio.pause();
+    setNeedsTapIndex(index);
+  };
 
   return (
     <MobileFrame immersive>
       <div
+        ref={scrollerRef}
         key={tab}
+        onScroll={handleScroll}
         className="h-dvh overflow-y-scroll snap-y snap-mandatory no-scrollbar"
       >
         {reels.map((r, i) => (
-          <ReelCard key={i} reel={r} eager={i === 0}>
+          <ReelCard
+            key={`${r.cover}-${i}`}
+            reel={r}
+            eager={i === 0}
+            needsTap={needsTapIndex === i}
+            onToggleAudio={() => handleToggleAudio(i)}
+          >
             <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-black/50" />
 
             {/* Top tabs */}
@@ -204,80 +290,22 @@ function Feed() {
 function ReelCard({
   reel,
   eager,
+  needsTap,
+  onToggleAudio,
   children,
 }: {
   reel: Reel;
   eager: boolean;
+  needsTap: boolean;
+  onToggleAudio: () => void;
   children: React.ReactNode;
 }) {
-  const ref = useRef<HTMLElement>(null);
-  const audioRef = useRef<HTMLMediaElement>(null);
-  const [needsTap, setNeedsTap] = useState(false);
-
-  useEffect(() => {
-    const el = ref.current;
-    const audio = audioRef.current;
-    if (!el) return;
-    const io = new IntersectionObserver(
-      ([entry]) => {
-        if (!audio) return;
-        if (entry.isIntersecting && entry.intersectionRatio > 0.6) {
-          audio.currentTime = 0;
-          playExclusive(audio).catch(() => setNeedsTap(true));
-        } else {
-          audio.pause();
-          if (currentPlaying === audio) currentPlaying = null;
-        }
-      },
-      { threshold: [0, 0.6, 1] },
-    );
-    io.observe(el);
-    return () => {
-      io.disconnect();
-      if (audio) {
-        audio.pause();
-        if (currentPlaying === audio) currentPlaying = null;
-      }
-    };
-  }, []);
-
-  const handleTap = () => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    if (audio.paused) {
-      playExclusive(audio).then(() => setNeedsTap(false)).catch(() => {});
-    } else {
-      audio.pause();
-      if (currentPlaying === audio) currentPlaying = null;
-    }
-  };
-
   return (
     <article
-      ref={ref}
-      onClick={handleTap}
+      onClick={onToggleAudio}
       className="relative h-dvh w-full snap-start snap-always overflow-hidden bg-black"
     >
       <PhotoCarousel reel={reel} eager={eager} />
-      {reel.audio && (
-        /\.(mp4|webm|mov|m4v|ogv)(\?|$)/i.test(reel.audio) ? (
-          <video
-            ref={audioRef as React.RefObject<HTMLVideoElement>}
-            src={reel.audio}
-            loop
-            preload="auto"
-            playsInline
-            className="hidden"
-          />
-        ) : (
-          <audio
-            ref={audioRef as React.RefObject<HTMLAudioElement>}
-            src={reel.audio}
-            loop
-            preload="auto"
-          />
-        )
-      )}
       {children}
       {needsTap && reel.audio && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
