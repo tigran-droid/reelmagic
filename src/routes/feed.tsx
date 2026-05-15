@@ -119,6 +119,7 @@ function Feed() {
     tab === "global"
       ? [...(dbReels.data ?? []), ...globalReels]
       : regionalReels;
+  const activeAudioUrl = reels[activeIndex]?.audio ?? null;
 
   useEffect(() => {
     setActiveIndex(0);
@@ -127,8 +128,7 @@ function Feed() {
   }, [tab]);
 
   useEffect(() => {
-    const activeReel = reels[activeIndex];
-    const audioUrl = activeReel?.audio;
+    const audioUrl = activeAudioUrl;
 
     if (!audioUrl) {
       audioRef.current?.pause();
@@ -160,7 +160,7 @@ function Feed() {
         audioRef.current = null;
       }
     };
-  }, [activeIndex, reels.length]);
+  }, [activeAudioUrl, activeIndex, reels.length]);
 
   useEffect(() => {
     return () => {
