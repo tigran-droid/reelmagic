@@ -16,6 +16,8 @@ export type Database = {
     Tables: {
       reels: {
         Row: {
+          audio_end_sec: number | null
+          audio_start_sec: number
           audio_url: string | null
           created_at: string
           hashtags: string[]
@@ -26,6 +28,8 @@ export type Database = {
           title: string
         }
         Insert: {
+          audio_end_sec?: number | null
+          audio_start_sec?: number
           audio_url?: string | null
           created_at?: string
           hashtags?: string[]
@@ -36,6 +40,8 @@ export type Database = {
           title: string
         }
         Update: {
+          audio_end_sec?: number | null
+          audio_start_sec?: number
           audio_url?: string | null
           created_at?: string
           hashtags?: string[]

@@ -28,6 +28,8 @@ type Reel = {
   likes: string;
   comments: string;
   audio?: string | null;
+  audioStart?: number;
+  audioEnd?: number | null;
 };
 
 const globalReels: Reel[] = [
@@ -128,6 +130,8 @@ function Feed() {
           likes: "0",
           comments: "0",
           audio: r.audio_url,
+          audioStart: Number(r.audio_start_sec ?? 0),
+          audioEnd: r.audio_end_sec != null ? Number(r.audio_end_sec) : null,
         };
       });
     },
@@ -140,7 +144,10 @@ function Feed() {
     tab === "global"
       ? [...(dbReels.data ?? []), ...globalReels]
       : regionalReels;
-  const activeAudioUrl = reels[activeIndex]?.audio ?? null;
+  const activeReel = reels[activeIndex];
+  const activeAudioUrl = activeReel?.audio ?? null;
+  const activeAudioStart = activeReel?.audioStart ?? 0;
+  const activeAudioEnd = activeReel?.audioEnd ?? null;
 
   useEffect(() => {
     setActiveIndex(0);
@@ -164,9 +171,23 @@ function Feed() {
     }
 
     const player = new Audio(audioUrl);
-    player.loop = true;
+    player.loop = false;
     player.preload = "auto";
     audioRef.current = player;
+
+    const startAt = activeAudioStart || 0;
+    const onLoaded = () => {
+      try { player.currentTime = startAt; } catch { /* noop */ }
+    };
+    const onTime = () => {
+      const stopAt = activeAudioEnd ?? player.duration;
+      if (stopAt && player.currentTime >= stopAt) {
+        player.currentTime = startAt;
+        player.play().catch(() => {});
+      }
+    };
+    player.addEventListener("loadedmetadata", onLoaded);
+    player.addEventListener("timeupdate", onTime);
 
     player.play().then(() => {
       setNeedsTapIndex((current) => (current === activeIndex ? null : current));
@@ -175,13 +196,15 @@ function Feed() {
     });
 
     return () => {
+      player.removeEventListener("loadedmetadata", onLoaded);
+      player.removeEventListener("timeupdate", onTime);
       player.pause();
       player.currentTime = 0;
       if (audioRef.current === player) {
         audioRef.current = null;
       }
     };
-  }, [activeAudioUrl, activeIndex, reels.length]);
+  }, [activeAudioUrl, activeAudioStart, activeAudioEnd, activeIndex, reels.length]);
 
   useEffect(() => {
     return () => {
@@ -212,7 +235,7 @@ function Feed() {
     if (!currentAudio) return;
 
     if (currentAudio.paused) {
-      currentAudio.currentTime = 0;
+      currentAudio.currentTime = activeAudioStart || 0;
       currentAudio.play().then(() => {
         setNeedsTapIndex(null);
       }).catch(() => {
