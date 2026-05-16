@@ -290,6 +290,18 @@ function Admin() {
             inputRef={audRef}
           />
 
+          {audio && (
+            <AudioTrimmer
+              file={audio}
+              start={audioStart}
+              end={audioEnd}
+              onChange={(s, e) => {
+                setAudioStart(s);
+                setAudioEnd(e);
+              }}
+            />
+          )}
+
           <button
             type="submit"
             disabled={busy}
@@ -360,6 +372,27 @@ function Admin() {
                       />
                     </label>
                   </Field>
+                  {editAudio ? (
+                    <AudioTrimmer
+                      file={editAudio}
+                      start={editAudioStart}
+                      end={editAudioEnd}
+                      onChange={(s, e) => {
+                        setEditAudioStart(s);
+                        setEditAudioEnd(e);
+                      }}
+                    />
+                  ) : editKeepAudio ? (
+                    <AudioTrimmer
+                      url={editKeepAudio.url}
+                      start={editAudioStart}
+                      end={editAudioEnd}
+                      onChange={(s, e) => {
+                        setEditAudioStart(s);
+                        setEditAudioEnd(e);
+                      }}
+                    />
+                  ) : null}
                   <div className="flex gap-2 pt-1">
                     <button
                       onClick={() => saveEdit(r.id)}
