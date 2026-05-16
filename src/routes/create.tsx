@@ -130,7 +130,22 @@ function CreatePage() {
               "generate-from-template",
               { body: { templateUrl, userImages: dataUrls } },
             );
-            if (fnErr) throw fnErr;
+            // supabase-js throws FunctionsHttpError for non-2xx; the JSON body
+            // is on fnErr.context (a Response). Read it so users see the real
+            // message (e.g. "AI credits exhausted") instead of a generic error.
+            if (fnErr) {
+              let msg = fnErr.message || "Generation failed";
+              try {
+                const ctx = (fnErr as unknown as { context?: Response }).context;
+                if (ctx && typeof ctx.json === "function") {
+                  const body = await ctx.clone().json();
+                  if (body?.error) msg = body.error;
+                }
+              } catch {
+                /* ignore parse errors */
+              }
+              throw new Error(msg);
+            }
             if (data?.error) throw new Error(data.error);
             if (!data?.imageDataUrl) throw new Error("No image returned");
             setJobs((prev) => {
