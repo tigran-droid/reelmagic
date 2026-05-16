@@ -38,7 +38,23 @@ serve(async (req) => {
 
     const instruction =
       prompt ??
-      "Using the FIRST image as the style template, create a new portrait that matches its composition, pose, lighting, color grading, wardrobe, background and props — but feature the subject shown in the additional reference photos. Preserve the subject's face shape, hairstyle and overall likeness. Tasteful, professional, fully clothed, photorealistic, high quality.";
+      [
+        "TASK: Face-accurate portrait recreation.",
+        "",
+        "The FIRST image is the STYLE TEMPLATE — copy its exact composition, pose, camera angle, framing, lighting direction, color grading, wardrobe, background, props and overall mood.",
+        "",
+        "All REMAINING images are reference photos of the SAME real person. Study every reference carefully and combine information from all of them to build an accurate identity model.",
+        "",
+        "CRITICAL IDENTITY RULES (do not violate):",
+        "- Preserve the EXACT facial features of the person in the reference photos: eye shape, eye color, eyebrow shape, nose shape and width, lip shape, jawline, chin, cheekbones, ears, and face proportions.",
+        "- Preserve the EXACT skin tone, skin texture, freckles, moles and any distinguishing marks.",
+        "- Preserve the EXACT hair color, hairline and hair texture (style may adapt to template if needed).",
+        "- Preserve age and gender exactly as in the reference photos.",
+        "- DO NOT idealize, beautify, smooth, slim, or stylize the face. DO NOT make the person look like a generic model.",
+        "- The final person MUST be instantly recognizable as the SAME individual shown in the reference photos — a friend or family member should identify them immediately.",
+        "",
+        "Output: a single photorealistic, high-resolution portrait. Tasteful, professional, fully clothed.",
+      ].join("\n");
 
     const content: any[] = [
       { type: "text", text: instruction },
@@ -58,7 +74,7 @@ serve(async (req) => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-3.1-flash-image-preview",
+          model: "google/gemini-3-pro-image-preview",
           messages: [{ role: "user", content }],
           modalities: ["image", "text"],
         }),

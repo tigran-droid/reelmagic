@@ -319,7 +319,7 @@ function CreatePage() {
           <StepHeader
             n={2}
             title="Upload your photos"
-            subtitle="1–4 clear photos of you. Front-facing works best."
+            subtitle="Upload 3–4 photos for best face accuracy. More angles = better likeness."
           />
 
           <label className="block">
@@ -341,10 +341,21 @@ function CreatePage() {
                   : "Tap to upload"}
               </span>
               <span className="text-xs text-muted-foreground">
-                Up to 4 photos · JPG or PNG
+                3–4 photos recommended · JPG or PNG
               </span>
             </div>
           </label>
+
+          {/* Photo tips for best identity match */}
+          <div className="rounded-2xl border border-border bg-secondary/40 p-3 text-xs text-muted-foreground space-y-1.5">
+            <p className="font-semibold text-foreground">📸 For best face accuracy:</p>
+            <ul className="space-y-1 pl-1">
+              <li>• 1 clear front-facing photo (good lighting)</li>
+              <li>• 1 slight side angle (3/4 view)</li>
+              <li>• 1 with a different expression (smiling)</li>
+              <li>• Avoid sunglasses, heavy filters, or group photos</li>
+            </ul>
+          </div>
 
           {previews.length > 0 && (
             <div className="grid grid-cols-4 gap-2">
