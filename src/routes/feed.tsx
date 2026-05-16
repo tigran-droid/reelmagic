@@ -131,6 +131,9 @@ function Feed() {
         };
       });
     },
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
   });
 
   const reels =
