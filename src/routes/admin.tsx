@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
-import { Upload, Image as ImageIcon, Music, Loader2, Trash2, Pencil, X, Check, Play, Pause } from "lucide-react";
+import { Upload, Image as ImageIcon, Music, Loader2, Trash2, Pencil, X, Check } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AudioTrimmer } from "@/components/AudioTrimmer";
 
@@ -295,7 +295,7 @@ function Admin() {
               file={audio}
               start={audioStart}
               end={audioEnd}
-              onChange={(s, e) => {
+              onChange={(s: number, e: number | null) => {
                 setAudioStart(s);
                 setAudioEnd(e);
               }}
@@ -377,7 +377,7 @@ function Admin() {
                       file={editAudio}
                       start={editAudioStart}
                       end={editAudioEnd}
-                      onChange={(s, e) => {
+                      onChange={(s: number, e: number | null) => {
                         setEditAudioStart(s);
                         setEditAudioEnd(e);
                       }}
@@ -387,7 +387,7 @@ function Admin() {
                       url={editKeepAudio.url}
                       start={editAudioStart}
                       end={editAudioEnd}
-                      onChange={(s, e) => {
+                      onChange={(s: number, e: number | null) => {
                         setEditAudioStart(s);
                         setEditAudioEnd(e);
                       }}
