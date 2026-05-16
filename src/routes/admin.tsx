@@ -1,8 +1,9 @@
 import { useState, useRef } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
-import { Upload, Image as ImageIcon, Music, Loader2, Trash2, Pencil, X, Check } from "lucide-react";
+import { Upload, Image as ImageIcon, Music, Loader2, Trash2, Pencil, X, Check, Play, Pause } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { AudioTrimmer } from "@/components/AudioTrimmer";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({
@@ -21,6 +22,8 @@ function Admin() {
   const [song, setSong] = useState("");
   const [images, setImages] = useState<File[]>([]);
   const [audio, setAudio] = useState<File | null>(null);
+  const [audioStart, setAudioStart] = useState(0);
+  const [audioEnd, setAudioEnd] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -29,6 +32,9 @@ function Admin() {
   const [editSong, setEditSong] = useState("");
   const [editImages, setEditImages] = useState<File[]>([]);
   const [editAudio, setEditAudio] = useState<File | null>(null);
+  const [editAudioStart, setEditAudioStart] = useState(0);
+  const [editAudioEnd, setEditAudioEnd] = useState<number | null>(null);
+  const [editKeepAudio, setEditKeepAudio] = useState<{ url: string; start: number; end: number | null } | null>(null);
   const [editBusy, setEditBusy] = useState(false);
   const imgRef = useRef<HTMLInputElement>(null);
   const audRef = useRef<HTMLInputElement>(null);
@@ -94,6 +100,8 @@ function Admin() {
         image_url,
         image_urls,
         audio_url,
+        audio_start_sec: audio ? audioStart : 0,
+        audio_end_sec: audio ? audioEnd : null,
       });
       if (error) throw error;
       setTitle("");
@@ -101,6 +109,8 @@ function Admin() {
       setSong("");
       setImages([]);
       setAudio(null);
+      setAudioStart(0);
+      setAudioEnd(null);
       if (imgRef.current) imgRef.current.value = "";
       if (audRef.current) audRef.current.value = "";
       setMsg("Reel published.");
@@ -122,6 +132,8 @@ function Admin() {
     image_url: string;
     image_urls: string[];
     audio_url: string | null;
+    audio_start_sec: number | null;
+    audio_end_sec: number | null;
   };
 
   function startEdit(r: ReelRow) {
@@ -131,12 +143,24 @@ function Admin() {
     setEditSong(r.song ?? "");
     setEditImages([]);
     setEditAudio(null);
+    setEditAudioStart(Number(r.audio_start_sec ?? 0));
+    setEditAudioEnd(r.audio_end_sec != null ? Number(r.audio_end_sec) : null);
+    setEditKeepAudio(
+      r.audio_url
+        ? {
+            url: r.audio_url,
+            start: Number(r.audio_start_sec ?? 0),
+            end: r.audio_end_sec != null ? Number(r.audio_end_sec) : null,
+          }
+        : null,
+    );
   }
 
   function cancelEdit() {
     setEditingId(null);
     setEditImages([]);
     setEditAudio(null);
+    setEditKeepAudio(null);
   }
 
   async function saveEdit(id: string) {
@@ -154,10 +178,14 @@ function Admin() {
         image_urls?: string[];
         image_url?: string;
         audio_url?: string;
+        audio_start_sec?: number;
+        audio_end_sec?: number | null;
       } = {
         title: editTitle.trim(),
         hashtags: tags,
         song: editSong.trim() || null,
+        audio_start_sec: editAudioStart,
+        audio_end_sec: editAudioEnd,
       };
       if (editImages.length > 0) {
         const image_urls = await Promise.all(
