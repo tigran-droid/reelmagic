@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as TrendsRouteImport } from './routes/trends'
 import { Route as ToolsRouteImport } from './routes/tools'
 import { Route as PhotoshopRouteImport } from './routes/photoshop'
 import { Route as FeedRouteImport } from './routes/feed'
@@ -16,6 +17,11 @@ import { Route as CreateRouteImport } from './routes/create'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 
+const TrendsRoute = TrendsRouteImport.update({
+  id: '/trends',
+  path: '/trends',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ToolsRoute = ToolsRouteImport.update({
   id: '/tools',
   path: '/tools',
@@ -54,6 +60,7 @@ export interface FileRoutesByFullPath {
   '/feed': typeof FeedRoute
   '/photoshop': typeof PhotoshopRoute
   '/tools': typeof ToolsRoute
+  '/trends': typeof TrendsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -62,6 +69,7 @@ export interface FileRoutesByTo {
   '/feed': typeof FeedRoute
   '/photoshop': typeof PhotoshopRoute
   '/tools': typeof ToolsRoute
+  '/trends': typeof TrendsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -71,12 +79,20 @@ export interface FileRoutesById {
   '/feed': typeof FeedRoute
   '/photoshop': typeof PhotoshopRoute
   '/tools': typeof ToolsRoute
+  '/trends': typeof TrendsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/admin' | '/create' | '/feed' | '/photoshop' | '/tools'
+  fullPaths:
+    | '/'
+    | '/admin'
+    | '/create'
+    | '/feed'
+    | '/photoshop'
+    | '/tools'
+    | '/trends'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/admin' | '/create' | '/feed' | '/photoshop' | '/tools'
+  to: '/' | '/admin' | '/create' | '/feed' | '/photoshop' | '/tools' | '/trends'
   id:
     | '__root__'
     | '/'
@@ -85,6 +101,7 @@ export interface FileRouteTypes {
     | '/feed'
     | '/photoshop'
     | '/tools'
+    | '/trends'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -94,10 +111,18 @@ export interface RootRouteChildren {
   FeedRoute: typeof FeedRoute
   PhotoshopRoute: typeof PhotoshopRoute
   ToolsRoute: typeof ToolsRoute
+  TrendsRoute: typeof TrendsRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/trends': {
+      id: '/trends'
+      path: '/trends'
+      fullPath: '/trends'
+      preLoaderRoute: typeof TrendsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/tools': {
       id: '/tools'
       path: '/tools'
@@ -150,6 +175,7 @@ const rootRouteChildren: RootRouteChildren = {
   FeedRoute: FeedRoute,
   PhotoshopRoute: PhotoshopRoute,
   ToolsRoute: ToolsRoute,
+  TrendsRoute: TrendsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
