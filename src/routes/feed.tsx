@@ -280,6 +280,14 @@ function Feed() {
 
   return (
     <MobileFrame immersive>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        onChange={onPickUserPhotos}
+        className="hidden"
+      />
       <div
         ref={scrollerRef}
         key={tab}
