@@ -72,9 +72,16 @@ function Trends() {
         </div>
 
         <div className="px-3 pt-3 pb-6 grid grid-cols-2 gap-3">
-          {tiles.map((t, i) => (
-            <TrendCard key={i} tile={t} onClick={open} />
-          ))}
+          <div className="flex flex-col gap-4">
+            {col1.map((t, i) => (
+              <TrendCard key={`a-${i}`} tile={t} onClick={open} />
+            ))}
+          </div>
+          <div className="flex flex-col gap-4 pt-10">
+            {col2.map((t, i) => (
+              <TrendCard key={`b-${i}`} tile={t} onClick={open} />
+            ))}
+          </div>
         </div>
       </div>
     </MobileFrame>
@@ -85,7 +92,7 @@ function TrendCard({ tile, onClick }: { tile: Tile; onClick: () => void }) {
   return (
     <button onClick={onClick} className="w-full text-left active:scale-[0.98] transition-transform">
       <div
-        className="relative w-full overflow-hidden rounded-md bg-neutral-100 aspect-[3/4]"
+        className="relative w-full overflow-hidden rounded-md bg-neutral-100 aspect-[9/16]"
       >
         <img
           src={tile.cover}
