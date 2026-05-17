@@ -90,8 +90,12 @@ function Feed() {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const navigate = useNavigate();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const pendingReelRef = useRef<Reel | null>(null);
 
   const startCreate = (reel: Reel) => {
+    // Store the reel as a draft, then immediately open the device file picker.
+    // The user picks their photo(s) right here — no intermediate page.
     try {
       sessionStorage.setItem(
         "create:draft",
@@ -103,7 +107,33 @@ function Feed() {
         }),
       );
     } catch {
-      // ignore storage errors
+      /* ignore */
+    }
+    pendingReelRef.current = reel;
+    fileInputRef.current?.click();
+  };
+
+  const onPickUserPhotos = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []).slice(0, 4);
+    // reset so picking the same file twice still fires onChange
+    e.target.value = "";
+    if (files.length === 0) return;
+    try {
+      const dataUrls = await Promise.all(
+        files.map(
+          (f) =>
+            new Promise<string>((resolve, reject) => {
+              const r = new FileReader();
+              r.onload = () => resolve(r.result as string);
+              r.onerror = () => reject(r.error);
+              r.readAsDataURL(f);
+            }),
+        ),
+      );
+      sessionStorage.setItem("create:userImages", JSON.stringify(dataUrls));
+      sessionStorage.setItem("create:autoRun", "1");
+    } catch {
+      /* ignore */
     }
     navigate({ to: "/create" });
   };
@@ -250,6 +280,14 @@ function Feed() {
 
   return (
     <MobileFrame immersive>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        onChange={onPickUserPhotos}
+        className="hidden"
+      />
       <div
         ref={scrollerRef}
         key={tab}
