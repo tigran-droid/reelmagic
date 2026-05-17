@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { MobileFrame } from "@/components/MobileFrame";
-import { ChevronLeft, Play } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import feed1 from "@/assets/feed-1.jpg";
@@ -72,32 +72,20 @@ function Trends() {
         </div>
 
         <div className="px-3 pt-3 pb-6 grid grid-cols-2 gap-3">
-          <div className="flex flex-col gap-4">
-            {col1.map((t, i) => (
-              <TrendCard key={`a-${i}`} tile={t} tall={i % 2 === 0} onClick={open} />
-            ))}
-          </div>
-          <div className="flex flex-col gap-4 pt-8">
-            {col2.map((t, i) => (
-              <TrendCard key={`b-${i}`} tile={t} tall={i % 2 === 1} onClick={open} />
-            ))}
-          </div>
+          {tiles.map((t, i) => (
+            <TrendCard key={i} tile={t} onClick={open} />
+          ))}
         </div>
       </div>
     </MobileFrame>
   );
 }
 
-function TrendCard({ tile, tall, onClick }: { tile: Tile; tall: boolean; onClick: () => void }) {
-  const tagText = tile.hashtags.length
-    ? tile.hashtags.slice(0, 3).map((h) => `#${h}`).join(" ")
-    : "";
+function TrendCard({ tile, onClick }: { tile: Tile; onClick: () => void }) {
   return (
     <button onClick={onClick} className="w-full text-left active:scale-[0.98] transition-transform">
       <div
-        className={`relative w-full overflow-hidden rounded-lg bg-neutral-100 ${
-          tall ? "aspect-[3/5]" : "aspect-[3/4]"
-        }`}
+        className="relative w-full overflow-hidden rounded-md bg-neutral-100 aspect-[3/4]"
       >
         <img
           src={tile.cover}
@@ -105,17 +93,11 @@ function TrendCard({ tile, tall, onClick }: { tile: Tile; tall: boolean; onClick
           loading="lazy"
           className="absolute inset-0 size-full object-cover"
         />
-        <div className="absolute top-2 right-2 size-7 rounded-full bg-black/40 backdrop-blur-sm grid place-items-center">
-          <Play className="size-3.5 text-white fill-white" />
-        </div>
       </div>
       <div className="pt-2">
         <div className="text-neutral-900 text-[13px] font-semibold leading-tight line-clamp-2">
           {tile.title}
         </div>
-        {tagText && (
-          <div className="text-neutral-500 text-[11px] mt-0.5 truncate">{tagText}</div>
-        )}
         {tile.song && (
           <div className="flex items-center gap-1.5 mt-1.5">
             <img
