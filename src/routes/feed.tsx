@@ -298,6 +298,8 @@ function Feed() {
             key={`${r.cover}-${i}`}
             reel={r}
             eager={i === 0}
+            visible={Math.abs(i - activeIndex) <= 1}
+            active={i === activeIndex}
             needsTap={needsTapIndex === i}
             onToggleAudio={() => handleToggleAudio(i)}
           >
@@ -373,12 +375,16 @@ function Feed() {
 function ReelCard({
   reel,
   eager,
+  visible,
+  active,
   needsTap,
   onToggleAudio,
   children,
 }: {
   reel: Reel;
   eager: boolean;
+  visible: boolean;
+  active: boolean;
   needsTap: boolean;
   onToggleAudio: () => void;
   children: React.ReactNode;
@@ -388,8 +394,12 @@ function ReelCard({
       onClick={onToggleAudio}
       className="relative h-dvh w-full snap-start snap-always overflow-hidden bg-black"
     >
-      <PhotoCarousel reel={reel} eager={eager} />
-      {children}
+      {visible ? (
+        <>
+          <PhotoCarousel reel={reel} eager={eager} active={active} />
+          {children}
+        </>
+      ) : null}
       {needsTap && reel.audio && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div className="bg-black/60 text-white text-xs font-semibold px-3 py-1.5 rounded-full backdrop-blur-sm">
@@ -410,14 +420,13 @@ function Action({ icon, label }: { icon: React.ReactNode; label: string }) {
   );
 }
 
-function PhotoCarousel({ reel, eager }: { reel: Reel; eager: boolean }) {
+function PhotoCarousel({ reel, eager, active }: { reel: Reel; eager: boolean; active: boolean }) {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const [index, setIndex] = useState(0);
   const count = reel.images.length;
 
-  // Auto-advance every 2.5s if more than one photo
   useEffect(() => {
-    if (count <= 1) return;
+    if (count <= 1 || !active) return;
     const id = setInterval(() => {
       const el = scrollerRef.current;
       if (!el) return;
@@ -425,7 +434,7 @@ function PhotoCarousel({ reel, eager }: { reel: Reel; eager: boolean }) {
       el.scrollTo({ left: next * el.clientWidth, behavior: "smooth" });
     }, 2500);
     return () => clearInterval(id);
-  }, [index, count]);
+  }, [index, count, active]);
 
   const onScroll = () => {
     const el = scrollerRef.current;
@@ -448,6 +457,7 @@ function PhotoCarousel({ reel, eager }: { reel: Reel; eager: boolean }) {
             src={src}
             alt={reel.title}
             loading={eager && i === 0 ? "eager" : "lazy"}
+            decoding="async"
             className="w-full h-full flex-shrink-0 snap-center object-cover"
           />
         ))}
