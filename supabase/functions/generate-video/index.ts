@@ -25,7 +25,7 @@ function dataUrlToBase64(dataUrl: string): { base64: string; mimeType: string } 
   return { mimeType: m[1], base64: m[2] };
 }
 
-serve(async (req) => {
+export async function handleGenerateVideoRequest(req: Request) {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -175,4 +175,6 @@ serve(async (req) => {
     console.error("generate-video error:", e);
     return jsonResponse({ error: e instanceof Error ? e.message : "Unknown error" }, 500);
   }
-});
+}
+
+serve(handleGenerateVideoRequest);
