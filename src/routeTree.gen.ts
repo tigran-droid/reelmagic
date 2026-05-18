@@ -16,6 +16,7 @@ import { Route as FeedRouteImport } from './routes/feed'
 import { Route as CreateRouteImport } from './routes/create'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as PhotoshopFeedRouteImport } from './routes/photoshop_.feed'
 
 const TrendsRoute = TrendsRouteImport.update({
   id: '/trends',
@@ -52,6 +53,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PhotoshopFeedRoute = PhotoshopFeedRouteImport.update({
+  id: '/photoshop_/feed',
+  path: '/photoshop/feed',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -61,6 +67,7 @@ export interface FileRoutesByFullPath {
   '/photoshop': typeof PhotoshopRoute
   '/tools': typeof ToolsRoute
   '/trends': typeof TrendsRoute
+  '/photoshop/feed': typeof PhotoshopFeedRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -70,6 +77,7 @@ export interface FileRoutesByTo {
   '/photoshop': typeof PhotoshopRoute
   '/tools': typeof ToolsRoute
   '/trends': typeof TrendsRoute
+  '/photoshop/feed': typeof PhotoshopFeedRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -80,6 +88,7 @@ export interface FileRoutesById {
   '/photoshop': typeof PhotoshopRoute
   '/tools': typeof ToolsRoute
   '/trends': typeof TrendsRoute
+  '/photoshop_/feed': typeof PhotoshopFeedRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -91,8 +100,17 @@ export interface FileRouteTypes {
     | '/photoshop'
     | '/tools'
     | '/trends'
+    | '/photoshop/feed'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/admin' | '/create' | '/feed' | '/photoshop' | '/tools' | '/trends'
+  to:
+    | '/'
+    | '/admin'
+    | '/create'
+    | '/feed'
+    | '/photoshop'
+    | '/tools'
+    | '/trends'
+    | '/photoshop/feed'
   id:
     | '__root__'
     | '/'
@@ -102,6 +120,7 @@ export interface FileRouteTypes {
     | '/photoshop'
     | '/tools'
     | '/trends'
+    | '/photoshop_/feed'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -112,6 +131,7 @@ export interface RootRouteChildren {
   PhotoshopRoute: typeof PhotoshopRoute
   ToolsRoute: typeof ToolsRoute
   TrendsRoute: typeof TrendsRoute
+  PhotoshopFeedRoute: typeof PhotoshopFeedRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -165,6 +185,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/photoshop_/feed': {
+      id: '/photoshop_/feed'
+      path: '/photoshop/feed'
+      fullPath: '/photoshop/feed'
+      preLoaderRoute: typeof PhotoshopFeedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -176,6 +203,7 @@ const rootRouteChildren: RootRouteChildren = {
   PhotoshopRoute: PhotoshopRoute,
   ToolsRoute: ToolsRoute,
   TrendsRoute: TrendsRoute,
+  PhotoshopFeedRoute: PhotoshopFeedRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
