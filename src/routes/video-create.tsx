@@ -239,7 +239,7 @@ function VideoCreatePage() {
         }
       }
 
-      if (!videoUrl) throw new Error("Video generation timed out");
+      if (!videoUrl) throw new Error(lastVideoError);
 
       setMessages((m) =>
         m
