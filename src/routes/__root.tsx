@@ -78,6 +78,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { property: "og:description", content: "Create glam, cinematic, anime, and retro AI reels from your photos." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
+      { name: "twitter:title", content: "Magic Studio — AI Reel Generator" },
+      { name: "twitter:description", content: "Create glam, cinematic, anime, and retro AI reels from your photos." },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/1a47270d-7dc1-4082-b042-73bb5b1abbab/id-preview-95624ff6--46d3f445-52cf-4410-974c-debe38553913.lovable.app-1779102263527.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/1a47270d-7dc1-4082-b042-73bb5b1abbab/id-preview-95624ff6--46d3f445-52cf-4410-974c-debe38553913.lovable.app-1779102263527.png" },
     ],
     links: [
       {
