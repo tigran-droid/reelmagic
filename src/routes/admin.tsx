@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
-import { Upload, Image as ImageIcon, Music, Loader2, Trash2, Pencil, X, Check, Plus, ArrowUp, ArrowDown } from "lucide-react";
+import { Upload, Image as ImageIcon, Music, Loader2, Trash2, Pencil, X, Check, Plus, ArrowUp, ArrowDown, Video as VideoIcon, FileText } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AudioTrimmer } from "@/components/AudioTrimmer";
 
@@ -16,7 +16,7 @@ export const Route = createFileRoute("/admin")({
 });
 
 function Admin() {
-  const [tab, setTab] = useState<"reels" | "photoshop">("reels");
+  const [tab, setTab] = useState<"reels" | "photoshop" | "videos">("reels");
   return (
     <div className="min-h-dvh bg-background text-foreground">
       <div className="max-w-5xl mx-auto px-4 md:px-8 py-6 md:py-10">
@@ -29,7 +29,7 @@ function Admin() {
         </div>
 
         <div className="inline-flex p-1 rounded-xl bg-card border border-border mb-6">
-          {(["reels", "photoshop"] as const).map((t) => (
+          {(["reels", "photoshop", "videos"] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -42,7 +42,9 @@ function Admin() {
           ))}
         </div>
 
-        {tab === "reels" ? <ReelsAdmin /> : <PhotoshopAdmin />}
+        {tab === "reels" && <ReelsAdmin />}
+        {tab === "photoshop" && <PhotoshopAdmin />}
+        {tab === "videos" && <VideosAdmin />}
       </div>
     </div>
   );
