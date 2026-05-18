@@ -14,6 +14,80 @@ export type Database = {
   }
   public: {
     Tables: {
+      photoshop_items: {
+        Row: {
+          audio_end_sec: number | null
+          audio_start_sec: number
+          audio_url: string | null
+          created_at: string
+          hashtags: string[]
+          id: string
+          image_url: string
+          image_urls: string[]
+          position: number
+          section_id: string
+          song: string | null
+          title: string
+        }
+        Insert: {
+          audio_end_sec?: number | null
+          audio_start_sec?: number
+          audio_url?: string | null
+          created_at?: string
+          hashtags?: string[]
+          id?: string
+          image_url: string
+          image_urls?: string[]
+          position?: number
+          section_id: string
+          song?: string | null
+          title: string
+        }
+        Update: {
+          audio_end_sec?: number | null
+          audio_start_sec?: number
+          audio_url?: string | null
+          created_at?: string
+          hashtags?: string[]
+          id?: string
+          image_url?: string
+          image_urls?: string[]
+          position?: number
+          section_id?: string
+          song?: string | null
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "photoshop_items_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "photoshop_sections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      photoshop_sections: {
+        Row: {
+          created_at: string
+          id: string
+          position: number
+          title: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          position?: number
+          title: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          position?: number
+          title?: string
+        }
+        Relationships: []
+      }
       reels: {
         Row: {
           audio_end_sec: number | null
