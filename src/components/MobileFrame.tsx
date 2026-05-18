@@ -1,12 +1,11 @@
 import { Link, useLocation } from "@tanstack/react-router";
-import { Video, ImagePlus, Play, Wand2 } from "lucide-react";
+import { Video, ImagePlus, MapPin } from "lucide-react";
 import type { ReactNode } from "react";
 
 const tabs = [
   { to: "/", label: "Videos", icon: Video },
   { to: "/photoshop", label: "Photoshop", icon: ImagePlus },
-  { to: "/feed", label: "Feed", icon: Play },
-  { to: "/tools", label: "Tools", icon: Wand2 },
+  { to: "/trends", label: "Local", icon: MapPin },
 ] as const;
 
 export function MobileFrame({ children, immersive = false }: { children: ReactNode; immersive?: boolean }) {
