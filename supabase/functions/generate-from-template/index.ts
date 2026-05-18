@@ -8,7 +8,8 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const EDIT_MODEL = "gpt-image-1";
+const GEMINI_MODEL = "google/gemini-2.5-flash-image";
+const OPENAI_EDIT_MODEL = "gpt-image-1";
 
 function jsonResponse(body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -52,8 +53,11 @@ export async function handleGenerateFromTemplateRequest(req: Request) {
   }
 
   try {
-    const apiKey = Deno.env.get("OPENAI_API_KEY");
-    if (!apiKey) throw new Error("OPENAI_API_KEY not configured");
+    const lovableKey = Deno.env.get("LOVABLE_API_KEY");
+    const openaiKey = Deno.env.get("OPENAI_API_KEY");
+    if (!lovableKey && !openaiKey) {
+      throw new Error("No image-edit API key configured (LOVABLE_API_KEY or OPENAI_API_KEY)");
+    }
 
     const { templateUrl, userImages, prompt } = await req.json();
     if (!templateUrl) throw new Error("templateUrl required");
@@ -78,8 +82,67 @@ export async function handleGenerateFromTemplateRequest(req: Request) {
         "Return one photorealistic edited image.",
       ].join("\n");
 
+    // Try Gemini (Lovable AI Gateway) first — far fewer false-positive safety blocks
+    // for normal user faces than OpenAI's gpt-image-1.
+    if (lovableKey) {
+      const content: Array<Record<string, unknown>> = [
+        { type: "text", text: instruction },
+        { type: "image_url", image_url: { url: templateDataUrl } },
+      ];
+      for (const img of userImages) {
+        content.push({ type: "image_url", image_url: { url: img } });
+      }
+
+      const geminiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${lovableKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: GEMINI_MODEL,
+          messages: [{ role: "user", content }],
+          modalities: ["image", "text"],
+        }),
+      });
+
+      if (geminiRes.ok) {
+        const json = await geminiRes.json();
+        const url: string | undefined = json?.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+        if (url) return jsonResponse({ imageDataUrl: url });
+        console.error("Gemini returned no image", JSON.stringify(json).slice(0, 500));
+      } else {
+        const text = await geminiRes.text();
+        console.error("Gemini image edit error", geminiRes.status, text);
+        if (geminiRes.status === 429) {
+          return jsonResponse({
+            error: "Rate limit reached. Please try again in a moment.",
+            errorCode: "RATE_LIMITED",
+            fallback: true,
+          });
+        }
+        if (geminiRes.status === 402) {
+          return jsonResponse({
+            error: "AI credits exhausted. Please add credits to continue.",
+            errorCode: "PAYMENT_REQUIRED",
+            fallback: true,
+          });
+        }
+        // fall through to OpenAI fallback
+      }
+    }
+
+    // Fallback: OpenAI gpt-image-1
+    if (!openaiKey) {
+      return jsonResponse({
+        error: "Image edit failed and no fallback provider is configured.",
+        errorCode: "AI_IMAGE_EDIT_FAILED",
+        fallback: true,
+      });
+    }
+
     const formData = new FormData();
-    formData.append("model", EDIT_MODEL);
+    formData.append("model", OPENAI_EDIT_MODEL);
     formData.append("prompt", instruction);
     formData.append("size", "1024x1024");
     formData.append("quality", "low");
@@ -94,9 +157,7 @@ export async function handleGenerateFromTemplateRequest(req: Request) {
 
     const aiRes = await fetch("https://api.openai.com/v1/images/edits", {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-      },
+      headers: { Authorization: `Bearer ${openaiKey}` },
       body: formData,
     });
 
@@ -109,7 +170,7 @@ export async function handleGenerateFromTemplateRequest(req: Request) {
       const message = parsed?.error?.message;
       if (code === "moderation_blocked") {
         return jsonResponse({
-          error: "The photo was blocked by the image editor's safety system. Please try a different photo (avoid suggestive, nude, or sensitive content).",
+          error: "The photo was blocked by the image editor's safety system. Please try a different photo.",
           errorCode: "MODERATION_BLOCKED",
           fallback: true,
         });
