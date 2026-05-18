@@ -103,7 +103,7 @@ function Categories() {
 
       {/* Featured */}
       <section className="px-6 pt-5 mb-8">
-        <button className="relative w-full aspect-[9/12] rounded-md overflow-hidden bg-card ring-1 ring-border shadow-2xl group text-left">
+        <button className="relative w-full aspect-video rounded-md overflow-hidden bg-card ring-1 ring-border shadow-2xl group text-left">
           <video
             src=""
             poster={featured.video}
@@ -117,7 +117,6 @@ function Categories() {
 
           <div className="absolute bottom-6 left-6 right-6">
             <div>
-              <span className="text-brand text-[10px] font-black uppercase tracking-widest">{featured.tag}</span>
               <h2 className="text-2xl font-extrabold text-white leading-tight">{featured.title}</h2>
               <p className="text-white/60 text-[10px] font-medium mt-0.5">{featured.uses} creators using</p>
             </div>
