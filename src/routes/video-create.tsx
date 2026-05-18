@@ -137,6 +137,7 @@ function VideoCreatePage() {
         } catch { /* ignore */ }
         throw new Error(msg);
       }
+      if (imgData?.fallback && imgData?.error) throw new Error(imgData.error);
       if (imgData?.error) throw new Error(imgData.error);
       const imageDataUrl: string | undefined = imgData?.imageDataUrl;
       if (!imageDataUrl) throw new Error("No image returned");
