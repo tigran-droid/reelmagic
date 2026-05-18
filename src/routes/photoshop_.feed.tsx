@@ -64,8 +64,8 @@ function PhotoshopFeed() {
         };
       });
     },
-    staleTime: 0,
-    refetchOnMount: "always",
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
   });
 
   const items = q.data ?? [];
