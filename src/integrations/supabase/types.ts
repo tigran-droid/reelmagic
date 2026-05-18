@@ -127,6 +127,42 @@ export type Database = {
         }
         Relationships: []
       }
+      video_items: {
+        Row: {
+          cover_image_url: string
+          created_at: string
+          hashtags: string[]
+          id: string
+          position: number
+          prompt: string
+          sample_video_url: string | null
+          song: string | null
+          title: string
+        }
+        Insert: {
+          cover_image_url: string
+          created_at?: string
+          hashtags?: string[]
+          id?: string
+          position?: number
+          prompt: string
+          sample_video_url?: string | null
+          song?: string | null
+          title: string
+        }
+        Update: {
+          cover_image_url?: string
+          created_at?: string
+          hashtags?: string[]
+          id?: string
+          position?: number
+          prompt?: string
+          sample_video_url?: string | null
+          song?: string | null
+          title?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

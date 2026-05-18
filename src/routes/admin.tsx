@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
-import { Upload, Image as ImageIcon, Music, Loader2, Trash2, Pencil, X, Check, Plus, ArrowUp, ArrowDown } from "lucide-react";
+import { Upload, Image as ImageIcon, Music, Loader2, Trash2, Pencil, X, Check, Plus, ArrowUp, ArrowDown, Video as VideoIcon, FileText } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AudioTrimmer } from "@/components/AudioTrimmer";
 
@@ -16,7 +16,7 @@ export const Route = createFileRoute("/admin")({
 });
 
 function Admin() {
-  const [tab, setTab] = useState<"reels" | "photoshop">("reels");
+  const [tab, setTab] = useState<"reels" | "photoshop" | "videos">("reels");
   return (
     <div className="min-h-dvh bg-background text-foreground">
       <div className="max-w-5xl mx-auto px-4 md:px-8 py-6 md:py-10">
@@ -29,7 +29,7 @@ function Admin() {
         </div>
 
         <div className="inline-flex p-1 rounded-xl bg-card border border-border mb-6">
-          {(["reels", "photoshop"] as const).map((t) => (
+          {(["reels", "photoshop", "videos"] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -42,7 +42,9 @@ function Admin() {
           ))}
         </div>
 
-        {tab === "reels" ? <ReelsAdmin /> : <PhotoshopAdmin />}
+        {tab === "reels" && <ReelsAdmin />}
+        {tab === "photoshop" && <PhotoshopAdmin />}
+        {tab === "videos" && <VideosAdmin />}
       </div>
     </div>
   );
@@ -625,5 +627,199 @@ function FilePicker({ icon, placeholder, accept, multiple, onChange, inputRef }:
       <input ref={inputRef} type="file" accept={accept} multiple={multiple} className="hidden"
         onChange={(e) => onChange(Array.from(e.target.files ?? []))} />
     </label>
+  );
+}
+
+/* =========================================================================
+   VIDEOS ADMIN — list managed videos shown on the home Videos section
+   ========================================================================= */
+
+type VideoItem = {
+  id: string;
+  title: string;
+  hashtags: string[];
+  song: string | null;
+  cover_image_url: string;
+  sample_video_url: string | null;
+  prompt: string;
+  position: number;
+  created_at: string;
+};
+
+function VideosAdmin() {
+  const qc = useQueryClient();
+  const [showAdd, setShowAdd] = useState(false);
+
+  const q = useQuery({
+    queryKey: ["admin-videos"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("video_items")
+        .select("*")
+        .order("position")
+        .order("created_at");
+      if (error) throw error;
+      return data as VideoItem[];
+    },
+  });
+
+  const invalidateAll = () => {
+    qc.invalidateQueries({ queryKey: ["admin-videos"] });
+    qc.invalidateQueries({ queryKey: ["home-videos"] });
+  };
+
+  const sorted = [...(q.data ?? [])].sort(
+    (a, b) => a.position - b.position || a.created_at.localeCompare(b.created_at),
+  );
+
+  const moveItem = async (index: number, dir: -1 | 1) => {
+    const target = sorted[index];
+    const neighbor = sorted[index + dir];
+    if (!target || !neighbor) return;
+    const [{ error: e1 }, { error: e2 }] = await Promise.all([
+      supabase.from("video_items").update({ position: neighbor.position }).eq("id", target.id),
+      supabase.from("video_items").update({ position: target.position }).eq("id", neighbor.id),
+    ]);
+    if (e1 || e2) { alert((e1 ?? e2)!.message); return; }
+    invalidateAll();
+  };
+
+  const deleteItem = async (id: string) => {
+    if (!confirm("Delete this video?")) return;
+    const { error } = await supabase.from("video_items").delete().eq("id", id);
+    if (error) { alert(error.message); return; }
+    invalidateAll();
+  };
+
+  return (
+    <div className="space-y-5">
+      {showAdd ? (
+        <AddVideoForm
+          existingCount={sorted.length}
+          onDone={() => { setShowAdd(false); invalidateAll(); }}
+          onCancel={() => setShowAdd(false)}
+        />
+      ) : (
+        <button onClick={() => setShowAdd(true)}
+          className="w-full inline-flex items-center justify-center gap-2 bg-brand text-white font-semibold rounded-lg py-2.5 text-sm">
+          <Plus className="size-4" />Add video
+        </button>
+      )}
+
+      <div className="space-y-2">
+        {sorted.map((it, idx) => (
+          <div key={it.id} className="bg-card border border-border rounded-xl p-2">
+            <div className="flex items-center gap-3">
+              <div className="relative size-14 shrink-0">
+                <img src={it.cover_image_url} alt={it.title} className="size-14 rounded-lg object-cover" />
+                {it.sample_video_url && (
+                  <span className="absolute bottom-0.5 right-0.5 bg-black/70 rounded p-0.5">
+                    <VideoIcon className="size-2.5 text-white" />
+                  </span>
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold truncate">{it.title}</p>
+                <p className="text-xs text-muted-foreground truncate">
+                  {it.hashtags.join(" ")} {it.song && `· ${it.song}`}
+                </p>
+                <p className="text-[10px] text-muted-foreground/70 truncate flex items-center gap-1 mt-0.5">
+                  <FileText className="size-2.5" /> {it.prompt}
+                </p>
+              </div>
+              <button onClick={() => moveItem(idx, -1)} disabled={idx === 0}
+                className="p-2 text-muted-foreground hover:text-foreground disabled:opacity-30" aria-label="Move up">
+                <ArrowUp className="size-3.5" />
+              </button>
+              <button onClick={() => moveItem(idx, 1)} disabled={idx === sorted.length - 1}
+                className="p-2 text-muted-foreground hover:text-foreground disabled:opacity-30" aria-label="Move down">
+                <ArrowDown className="size-3.5" />
+              </button>
+              <button onClick={() => deleteItem(it.id)}
+                className="p-2 text-muted-foreground hover:text-destructive" aria-label="Delete">
+                <Trash2 className="size-4" />
+              </button>
+            </div>
+          </div>
+        ))}
+        {sorted.length === 0 && (
+          <p className="text-sm text-muted-foreground">No videos yet.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AddVideoForm({ existingCount, onDone, onCancel }: {
+  existingCount: number; onDone: () => void; onCancel: () => void;
+}) {
+  const [title, setTitle] = useState("");
+  const [hashtags, setHashtags] = useState("");
+  const [song, setSong] = useState("");
+  const [cover, setCover] = useState<File | null>(null);
+  const [sample, setSample] = useState<File | null>(null);
+  const [prompt, setPrompt] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const submit = async () => {
+    if (!title.trim() || !cover || !prompt.trim()) {
+      alert("Title, cover photo and prompt are required.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const cover_image_url = await uploadFile("reel-images", cover);
+      const sample_video_url = sample ? await uploadFile("video-files", sample) : null;
+      const { error } = await supabase.from("video_items").insert({
+        title: title.trim(),
+        hashtags: parseTags(hashtags),
+        song: song.trim() || null,
+        cover_image_url,
+        sample_video_url,
+        prompt: prompt.trim(),
+        position: existingCount,
+      });
+      if (error) throw error;
+      onDone();
+    } catch (err: unknown) {
+      const e = err as { message?: string };
+      alert(`Error: ${e.message ?? "upload failed"}`);
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="space-y-3 p-4 rounded-2xl bg-card border border-border">
+      <h3 className="font-semibold">Add video</h3>
+      <Field label="Title"><Input value={title} onChange={setTitle} placeholder="Cinematic ride" /></Field>
+      <Field label="Hashtags"><Input value={hashtags} onChange={setHashtags} placeholder="travel, cinematic" /></Field>
+      <Field label="Song name"><Input value={song} onChange={setSong} placeholder="Track — Artist" /></Field>
+      <Field label="Cover photo (used as visual reference)">
+        <FilePicker icon={<ImageIcon className="size-4" />} accept="image/*"
+          placeholder={cover ? cover.name : "Choose cover photo…"}
+          onChange={(files) => setCover(files[0] ?? null)} />
+      </Field>
+      <Field label="Sample video (preview shown to users)">
+        <FilePicker icon={<VideoIcon className="size-4" />} accept="video/*"
+          placeholder={sample ? sample.name : "Choose sample .mp4…"}
+          onChange={(files) => setSample(files[0] ?? null)} />
+      </Field>
+      <Field label="AI prompt (used to generate user video)">
+        <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)}
+          placeholder="A cinematic 8 second handheld shot of the subject walking through neon-lit streets at night, soft rain, film grain…"
+          rows={4}
+          className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm" />
+      </Field>
+      <div className="flex gap-2 pt-1">
+        <button onClick={submit} disabled={busy}
+          className="flex-1 inline-flex items-center justify-center gap-1.5 bg-brand text-white text-sm font-semibold rounded-lg py-2 disabled:opacity-60">
+          {busy ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
+          {busy ? "Uploading…" : "Add video"}
+        </button>
+        <button onClick={onCancel} disabled={busy}
+          className="px-4 inline-flex items-center justify-center gap-1.5 bg-muted text-foreground text-sm font-semibold rounded-lg py-2">
+          Cancel
+        </button>
+      </div>
+    </div>
   );
 }
