@@ -8,7 +8,7 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const GEMINI_MODEL = "google/gemini-2.5-flash-image";
+const GEMINI_MODEL = "gemini-2.5-flash-image-preview";
 const OPENAI_EDIT_MODEL = "gpt-image-1";
 
 function jsonResponse(body: Record<string, unknown>, status = 200) {
@@ -53,10 +53,10 @@ export async function handleGenerateFromTemplateRequest(req: Request) {
   }
 
   try {
-    const lovableKey = Deno.env.get("LOVABLE_API_KEY");
+    const googleKey = Deno.env.get("GOOGLE_AI_STUDIO_API_KEY");
     const openaiKey = Deno.env.get("OPENAI_API_KEY");
-    if (!lovableKey && !openaiKey) {
-      throw new Error("No image-edit API key configured (LOVABLE_API_KEY or OPENAI_API_KEY)");
+    if (!googleKey && !openaiKey) {
+      throw new Error("No image-edit API key configured (GOOGLE_AI_STUDIO_API_KEY or OPENAI_API_KEY)");
     }
 
     const { templateUrl, userImages, prompt } = await req.json();
@@ -82,34 +82,40 @@ export async function handleGenerateFromTemplateRequest(req: Request) {
         "Return one photorealistic edited image.",
       ].join("\n");
 
-    // Try Gemini (Lovable AI Gateway) first — far fewer false-positive safety blocks
-    // for normal user faces than OpenAI's gpt-image-1.
-    if (lovableKey) {
-      const content: Array<Record<string, unknown>> = [
-        { type: "text", text: instruction },
-        { type: "image_url", image_url: { url: templateDataUrl } },
-      ];
+    // Try Google Gemini directly (using user's own API key — bypasses Lovable AI credits
+    // and has far fewer false-positive safety blocks on normal user faces).
+    if (googleKey) {
+      const parts: Array<Record<string, unknown>> = [{ text: instruction }];
+      const tpl = dataUrlToBlob(templateDataUrl);
+      const tplB64 = templateDataUrl.split(",")[1];
+      parts.push({ inlineData: { mimeType: tpl.mimeType, data: tplB64 } });
       for (const img of userImages) {
-        content.push({ type: "image_url", image_url: { url: img } });
+        const m = /^data:([^;]+);base64,(.+)$/.exec(img);
+        if (!m) continue;
+        parts.push({ inlineData: { mimeType: m[1], data: m[2] } });
       }
 
-      const geminiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${lovableKey}`,
-          "Content-Type": "application/json",
+      const geminiRes = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${googleKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts }],
+            generationConfig: { responseModalities: ["IMAGE", "TEXT"] },
+          }),
         },
-        body: JSON.stringify({
-          model: GEMINI_MODEL,
-          messages: [{ role: "user", content }],
-          modalities: ["image", "text"],
-        }),
-      });
+      );
 
       if (geminiRes.ok) {
         const json = await geminiRes.json();
-        const url: string | undefined = json?.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-        if (url) return jsonResponse({ imageDataUrl: url });
+        const respParts: any[] = json?.candidates?.[0]?.content?.parts ?? [];
+        const imgPart = respParts.find((p) => p?.inlineData?.data || p?.inline_data?.data);
+        const inline = imgPart?.inlineData ?? imgPart?.inline_data;
+        if (inline?.data) {
+          const mime = inline.mimeType || inline.mime_type || "image/png";
+          return jsonResponse({ imageDataUrl: `data:${mime};base64,${inline.data}` });
+        }
         console.error("Gemini returned no image", JSON.stringify(json).slice(0, 500));
       } else {
         const text = await geminiRes.text();
@@ -118,13 +124,6 @@ export async function handleGenerateFromTemplateRequest(req: Request) {
           return jsonResponse({
             error: "Rate limit reached. Please try again in a moment.",
             errorCode: "RATE_LIMITED",
-            fallback: true,
-          });
-        }
-        if (geminiRes.status === 402) {
-          return jsonResponse({
-            error: "AI credits exhausted. Please add credits to continue.",
-            errorCode: "PAYMENT_REQUIRED",
             fallback: true,
           });
         }
