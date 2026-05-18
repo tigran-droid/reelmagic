@@ -6,7 +6,7 @@ Deno.test("returns fallback JSON when provider omits image data", async () => {
   const originalEnvGet = Deno.env.get;
 
   const envStub = stub(Deno.env, "get", (key: string) => {
-    if (key === "GOOGLE_AI_STUDIO_API_KEY") return "test-key";
+    if (key === "OPENAI_API_KEY") return "test-key";
     return originalEnvGet.call(Deno.env, key);
   });
 
@@ -20,20 +20,10 @@ Deno.test("returns fallback JSON when provider omits image data", async () => {
       });
     }
 
-    return new Response(
-      JSON.stringify({
-        candidates: [
-          {
-            finishReason: "IMAGE_OTHER",
-            finishMessage: "Unable to show the generated image.",
-          },
-        ],
-      }),
-      {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      },
-    );
+    return new Response(JSON.stringify({ data: [] }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
   });
 
   try {
@@ -52,8 +42,7 @@ Deno.test("returns fallback JSON when provider omits image data", async () => {
 
     assertEquals(response.status, 200);
     assertEquals(body.fallback, true);
-    assertEquals(body.errorCode, "AI_RESPONSE_MISSING_IMAGE");
-    assertEquals(body.finishReason, "IMAGE_OTHER");
+    assertEquals(body.errorCode, "AI_IMAGE_EDIT_NO_OUTPUT");
   } finally {
     fetchStub.restore();
     envStub.restore();
