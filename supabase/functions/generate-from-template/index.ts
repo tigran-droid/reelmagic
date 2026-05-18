@@ -102,10 +102,22 @@ export async function handleGenerateFromTemplateRequest(req: Request) {
     if (!aiRes.ok) {
       const text = await aiRes.text();
       console.error("OpenAI image edit error", aiRes.status, text);
-      return jsonResponse(
-        { error: `Image edit failed [${aiRes.status}]: ${text.slice(0, 500)}` },
-        502,
-      );
+      let parsed: any = null;
+      try { parsed = JSON.parse(text); } catch { /* ignore */ }
+      const code = parsed?.error?.code;
+      const message = parsed?.error?.message;
+      if (code === "moderation_blocked") {
+        return jsonResponse({
+          error: "The photo was blocked by the image editor's safety system. Please try a different photo (avoid suggestive, nude, or sensitive content).",
+          errorCode: "MODERATION_BLOCKED",
+          fallback: true,
+        });
+      }
+      return jsonResponse({
+        error: message || `Image edit failed [${aiRes.status}]`,
+        errorCode: code || "AI_IMAGE_EDIT_FAILED",
+        fallback: true,
+      });
     }
 
     const json = await aiRes.json();
