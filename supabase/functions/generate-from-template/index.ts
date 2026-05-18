@@ -8,7 +8,7 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const GEMINI_MODEL = "gemini-2.5-flash-image-preview";
+const GEMINI_MODEL = "gemini-3.1-flash-image-preview";
 const OPENAI_EDIT_MODEL = "gpt-image-1";
 
 function jsonResponse(body: Record<string, unknown>, status = 200) {
