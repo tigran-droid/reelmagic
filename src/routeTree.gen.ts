@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as VideoCreateRouteImport } from './routes/video-create'
 import { Route as TrendsRouteImport } from './routes/trends'
 import { Route as ToolsRouteImport } from './routes/tools'
 import { Route as PhotoshopRouteImport } from './routes/photoshop'
@@ -18,6 +19,11 @@ import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as PhotoshopFeedRouteImport } from './routes/photoshop_.feed'
 
+const VideoCreateRoute = VideoCreateRouteImport.update({
+  id: '/video-create',
+  path: '/video-create',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TrendsRoute = TrendsRouteImport.update({
   id: '/trends',
   path: '/trends',
@@ -67,6 +73,7 @@ export interface FileRoutesByFullPath {
   '/photoshop': typeof PhotoshopRoute
   '/tools': typeof ToolsRoute
   '/trends': typeof TrendsRoute
+  '/video-create': typeof VideoCreateRoute
   '/photoshop/feed': typeof PhotoshopFeedRoute
 }
 export interface FileRoutesByTo {
@@ -77,6 +84,7 @@ export interface FileRoutesByTo {
   '/photoshop': typeof PhotoshopRoute
   '/tools': typeof ToolsRoute
   '/trends': typeof TrendsRoute
+  '/video-create': typeof VideoCreateRoute
   '/photoshop/feed': typeof PhotoshopFeedRoute
 }
 export interface FileRoutesById {
@@ -88,6 +96,7 @@ export interface FileRoutesById {
   '/photoshop': typeof PhotoshopRoute
   '/tools': typeof ToolsRoute
   '/trends': typeof TrendsRoute
+  '/video-create': typeof VideoCreateRoute
   '/photoshop_/feed': typeof PhotoshopFeedRoute
 }
 export interface FileRouteTypes {
@@ -100,6 +109,7 @@ export interface FileRouteTypes {
     | '/photoshop'
     | '/tools'
     | '/trends'
+    | '/video-create'
     | '/photoshop/feed'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -110,6 +120,7 @@ export interface FileRouteTypes {
     | '/photoshop'
     | '/tools'
     | '/trends'
+    | '/video-create'
     | '/photoshop/feed'
   id:
     | '__root__'
@@ -120,6 +131,7 @@ export interface FileRouteTypes {
     | '/photoshop'
     | '/tools'
     | '/trends'
+    | '/video-create'
     | '/photoshop_/feed'
   fileRoutesById: FileRoutesById
 }
@@ -131,11 +143,19 @@ export interface RootRouteChildren {
   PhotoshopRoute: typeof PhotoshopRoute
   ToolsRoute: typeof ToolsRoute
   TrendsRoute: typeof TrendsRoute
+  VideoCreateRoute: typeof VideoCreateRoute
   PhotoshopFeedRoute: typeof PhotoshopFeedRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/video-create': {
+      id: '/video-create'
+      path: '/video-create'
+      fullPath: '/video-create'
+      preLoaderRoute: typeof VideoCreateRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/trends': {
       id: '/trends'
       path: '/trends'
@@ -203,6 +223,7 @@ const rootRouteChildren: RootRouteChildren = {
   PhotoshopRoute: PhotoshopRoute,
   ToolsRoute: ToolsRoute,
   TrendsRoute: TrendsRoute,
+  VideoCreateRoute: VideoCreateRoute,
   PhotoshopFeedRoute: PhotoshopFeedRoute,
 }
 export const routeTree = rootRouteImport
