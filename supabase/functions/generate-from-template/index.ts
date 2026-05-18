@@ -25,7 +25,7 @@ async function urlToDataUrl(url: string): Promise<string> {
   return `data:${mime};base64,${btoa(bin)}`;
 }
 
-serve(async (req) => {
+export async function handleGenerateFromTemplateRequest(req: Request) {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -129,4 +129,6 @@ serve(async (req) => {
     console.error("generate-from-template error:", e);
     return jsonResponse({ error: e instanceof Error ? e.message : "Unknown error" }, 500);
   }
-});
+}
+
+serve(handleGenerateFromTemplateRequest);
