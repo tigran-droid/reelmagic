@@ -10,8 +10,8 @@ Deno.test("returns fallback JSON when provider omits image data", async () => {
     return originalEnvGet.call(Deno.env, key);
   });
 
-  const fetchStub = stub(globalThis, "fetch", async (input: string | Request) => {
-    const url = typeof input === "string" ? input : input.url;
+  const fetchStub = stub(globalThis, "fetch", async (input: string | Request | URL, _init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
 
     if (url === "https://example.com/template.png") {
       return new Response(Uint8Array.from([137, 80, 78, 71]), {
