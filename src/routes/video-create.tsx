@@ -49,6 +49,11 @@ type ChatMessage =
 
 const ITEM_KEY = "video-create:item";
 const USER_IMAGES_KEY = "video-create:userImages";
+const VIDEO_MODELS = [
+  "veo-3.1-fast-generate-preview",
+  "veo-3.1-lite-generate-preview",
+  "veo-3.0-fast-generate-001",
+] as const;
 
 function uid() {
   return Math.random().toString(36).slice(2);
@@ -166,39 +171,75 @@ function VideoCreatePage() {
         },
       ]);
 
-      // STEP 2 — start video generation
-      const { data: startData, error: startErr } = await supabase.functions.invoke(
-        "generate-video",
-        {
-          body: { action: "start", imageDataUrl, prompt: item.prompt },
-        },
-      );
-      if (startErr) throw new Error(startErr.message || "Video start failed");
-      if (startData?.error) throw new Error(startData.error);
-      const operationName: string | undefined = startData?.operationName;
-      if (!operationName) throw new Error("No operation name returned");
-
-      // Poll
-      const startTs = Date.now();
+      // STEP 2 — start video generation with model fallback
       const maxMs = 5 * 60 * 1000;
       let videoUrl: string | null = null;
-      while (Date.now() - startTs < maxMs) {
-        await new Promise((r) => setTimeout(r, 6000));
-        const { data: pollData, error: pollErr } = await supabase.functions.invoke(
-          "generate-video",
-          { body: { action: "poll", operationName } },
+      let lastVideoError = "Video generation failed";
+
+      for (let modelIndex = 0; modelIndex < VIDEO_MODELS.length && !videoUrl; modelIndex += 1) {
+        const model = VIDEO_MODELS[modelIndex];
+
+        setMessages((m) =>
+          m.map((message) =>
+            message.id === statusId
+              ? {
+                  ...message,
+                  text:
+                    modelIndex === 0
+                      ? "Generating your video — this takes 30–90 seconds…"
+                      : "Retrying video generation with another model…",
+                }
+              : message,
+          ),
         );
-        if (pollErr) throw new Error(pollErr.message || "Polling failed");
-        if (pollData?.error) throw new Error(pollData.error);
-        if (pollData?.done) {
-          if (pollData.videoUrl) {
-            videoUrl = pollData.videoUrl;
-            break;
+
+        const { data: startData, error: startErr } = await supabase.functions.invoke(
+          "generate-video",
+          {
+            body: { action: "start", imageDataUrl, prompt: item.prompt, model },
+          },
+        );
+        if (startErr) throw new Error(startErr.message || "Video start failed");
+        if (startData?.error) throw new Error(startData.error);
+        const operationName: string | undefined = startData?.operationName;
+        if (!operationName) throw new Error("No operation name returned");
+
+        const startTs = Date.now();
+        let shouldTryNextModel = false;
+
+        while (Date.now() - startTs < maxMs) {
+          await new Promise((r) => setTimeout(r, 6000));
+          const { data: pollData, error: pollErr } = await supabase.functions.invoke(
+            "generate-video",
+            { body: { action: "poll", operationName } },
+          );
+          if (pollErr) throw new Error(pollErr.message || "Polling failed");
+
+          if (pollData?.done) {
+            if (pollData.videoUrl) {
+              videoUrl = pollData.videoUrl;
+              break;
+            }
+
+            lastVideoError = pollData?.error || "Video generation finished but no URL returned";
+            if (pollData?.filtered && pollData?.retryable && modelIndex < VIDEO_MODELS.length - 1) {
+              shouldTryNextModel = true;
+              break;
+            }
+
+            throw new Error(lastVideoError);
           }
-          throw new Error(pollData?.error || "Video generation finished but no URL returned");
+        }
+
+        if (videoUrl) break;
+        if (shouldTryNextModel) continue;
+        if (Date.now() - startTs >= maxMs) {
+          lastVideoError = "Video generation timed out";
+          throw new Error(lastVideoError);
         }
       }
-      if (!videoUrl) throw new Error("Video generation timed out");
+
+      if (!videoUrl) throw new Error(lastVideoError);
 
       setMessages((m) =>
         m
