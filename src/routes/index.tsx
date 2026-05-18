@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { MobileFrame } from "@/components/MobileFrame";
-import { Search, Bell, Play, ChevronRight, Video as VideoIcon } from "lucide-react";
+import { Search, Bell, ChevronRight, Video as VideoIcon } from "lucide-react";
 import glam from "@/assets/reel-glam.jpg";
 import anime from "@/assets/reel-anime.jpg";
 import vhs from "@/assets/reel-vhs.jpg";
@@ -15,8 +15,6 @@ export const Route = createFileRoute("/")({
   }),
   component: Categories,
 });
-
-const categories = ["Trending", "Glam", "Cinematic", "Anime", "Retro", "Cyber"];
 
 const featured = {
   video: glam,
@@ -103,28 +101,9 @@ function Categories() {
         </div>
       </header>
 
-      {/* Categories */}
-      <div className="flex gap-2 overflow-x-auto px-6 py-5 no-scrollbar">
-        {categories.map((c, i) => {
-          const active = i === 0;
-          return (
-            <button
-              key={c}
-              className={`px-5 py-2 rounded-full font-bold text-xs whitespace-nowrap transition-colors ${
-                active
-                  ? "bg-brand text-brand-foreground shadow-[0_0_20px_color-mix(in_oklab,var(--brand)_40%,transparent)]"
-                  : "bg-secondary/60 text-muted-foreground border border-border/60"
-              }`}
-            >
-              {c}
-            </button>
-          );
-        })}
-      </div>
-
       {/* Featured */}
-      <section className="px-6 mb-10">
-        <button className="relative w-full aspect-[1.6/1] rounded-[2.5rem] overflow-hidden bg-card ring-1 ring-border shadow-2xl group text-left">
+      <section className="px-6 pt-5 mb-8">
+        <button className="relative w-full aspect-[9/12] rounded-md overflow-hidden bg-card ring-1 ring-border shadow-2xl group text-left">
           <video
             src=""
             poster={featured.video}
@@ -136,25 +115,12 @@ function Categories() {
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent" />
 
-          <div className="absolute top-5 left-5">
-            <div className="px-3 py-1 bg-accent text-accent-foreground text-[9px] font-black uppercase tracking-widest rounded-full flex items-center gap-1.5 shadow-lg">
-              <span className="size-1.5 bg-accent-foreground rounded-full" /> Featured
-            </div>
-          </div>
-
-          <div className="absolute top-5 right-5 px-2 py-1 bg-black/50 backdrop-blur-md rounded-lg border border-white/10 text-[10px] font-bold text-white tabular-nums">
-            {featured.duration}
-          </div>
-
-          <div className="absolute bottom-6 left-6 right-6 flex justify-between items-end gap-3">
+          <div className="absolute bottom-6 left-6 right-6">
             <div>
               <span className="text-brand text-[10px] font-black uppercase tracking-widest">{featured.tag}</span>
               <h2 className="text-2xl font-extrabold text-white leading-tight">{featured.title}</h2>
               <p className="text-white/60 text-[10px] font-medium mt-0.5">{featured.uses} creators using</p>
             </div>
-            <button className="size-14 bg-brand rounded-2xl grid place-items-center shadow-[0_8px_24px_color-mix(in_oklab,var(--brand)_50%,transparent)] rotate-3 hover:rotate-0 transition-transform">
-              <Play className="size-6 fill-brand-foreground text-brand-foreground" />
-            </button>
           </div>
         </button>
       </section>
@@ -171,7 +137,7 @@ function Categories() {
             </div>
             <div className="flex gap-3 overflow-x-auto no-scrollbar snap-x">
               {s.items.map((p, i) => (
-                <button key={i} className="flex-none w-32 aspect-[4/5] snap-start rounded-lg overflow-hidden relative bg-secondary ring-1 ring-border">
+                <button key={i} className="flex-none w-32 aspect-[9/12] snap-start rounded-md overflow-hidden relative bg-secondary ring-1 ring-border">
                   <img src={p.img} alt={p.name} loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/10 to-transparent" />
                   <div className="absolute bottom-3 left-3 right-3 text-left">
