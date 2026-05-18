@@ -8,6 +8,13 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+function jsonResponse(body: Record<string, unknown>, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
 async function urlToDataUrl(url: string): Promise<string> {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Failed to fetch image (${res.status})`);
@@ -64,9 +71,9 @@ serve(async (req) => {
     };
 
     const parts: any[] = [
-      { text: instruction },
       dataUrlToInline(templateDataUrl),
       ...userImages.map((u: string) => dataUrlToInline(u)),
+      { text: instruction },
     ];
 
     const model = "gemini-2.5-flash-image";
@@ -85,35 +92,41 @@ serve(async (req) => {
     if (!aiRes.ok) {
       const text = await aiRes.text();
       console.error("Google AI error", aiRes.status, text);
-      return new Response(
-        JSON.stringify({ error: `Image generation failed [${aiRes.status}]: ${text.slice(0, 500)}` }),
-        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      return jsonResponse(
+        { error: `Image generation failed [${aiRes.status}]: ${text.slice(0, 500)}` },
+        502,
       );
     }
 
     const json = await aiRes.json();
-    const respParts = json?.candidates?.[0]?.content?.parts ?? [];
+    const candidate = json?.candidates?.[0];
+    const respParts = candidate?.content?.parts ?? [];
     const imgPart = respParts.find((p: any) => p?.inline_data || p?.inlineData);
     const inline = imgPart?.inline_data ?? imgPart?.inlineData;
     if (!inline?.data) {
       console.error("Missing image in Gemini response", JSON.stringify(json).slice(0, 500));
-      throw new Error("AI response missing image data");
+      const finishReason = candidate?.finishReason ?? null;
+      const finishMessage = candidate?.finishMessage ?? null;
+
+      return jsonResponse({
+        error:
+          finishReason === "IMAGE_OTHER"
+            ? "Couldn't generate a photo from this combination. Try a clearer face photo, a different template, or try again."
+            : finishMessage || "AI response missing image data",
+        errorCode:
+          finishReason === "IMAGE_OTHER"
+            ? "AI_RESPONSE_MISSING_IMAGE"
+            : "AI_IMAGE_GENERATION_FAILED",
+        fallback: true,
+        finishReason,
+      });
     }
     const mime = inline.mime_type ?? inline.mimeType ?? "image/png";
     const imageDataUrl = `data:${mime};base64,${inline.data}`;
 
-    return new Response(
-      JSON.stringify({ imageDataUrl }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
+    return jsonResponse({ imageDataUrl });
   } catch (e) {
     console.error("generate-from-template error:", e);
-    return new Response(
-      JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      },
-    );
+    return jsonResponse({ error: e instanceof Error ? e.message : "Unknown error" }, 500);
   }
 });
