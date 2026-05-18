@@ -51,7 +51,7 @@ serve(async (req) => {
             ],
             parameters: {
               aspectRatio: "9:16",
-              personGeneration: "allow_all",
+              personGeneration: "allow_adult",
             },
           }),
         },
