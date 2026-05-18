@@ -24,8 +24,8 @@ serve(async (req) => {
   }
 
   try {
-    const apiKey = Deno.env.get("LOVABLE_API_KEY");
-    if (!apiKey) throw new Error("LOVABLE_API_KEY not configured");
+    const apiKey = Deno.env.get("GOOGLE_AI_STUDIO_API_KEY");
+    if (!apiKey) throw new Error("GOOGLE_AI_STUDIO_API_KEY not configured");
 
     const { templateUrl, userImages, prompt } = await req.json();
     if (!templateUrl) throw new Error("templateUrl required");
@@ -56,46 +56,35 @@ serve(async (req) => {
         "Output: a single photorealistic, high-resolution portrait. Tasteful, professional, fully clothed.",
       ].join("\n");
 
-    const content: any[] = [
-      { type: "text", text: instruction },
-      { type: "image_url", image_url: { url: templateDataUrl } },
-      ...userImages.map((url: string) => ({
-        type: "image_url",
-        image_url: { url },
-      })),
+    // Build Gemini parts: instruction text + template image + user images
+    const dataUrlToInline = (dataUrl: string) => {
+      const m = /^data:([^;]+);base64,(.+)$/.exec(dataUrl);
+      if (!m) throw new Error("Invalid data URL");
+      return { inline_data: { mime_type: m[1], data: m[2] } };
+    };
+
+    const parts: any[] = [
+      { text: instruction },
+      dataUrlToInline(templateDataUrl),
+      ...userImages.map((u: string) => dataUrlToInline(u)),
     ];
 
+    const model = "gemini-2.5-flash-image";
     const aiRes = await fetch(
-      "https://ai.gateway.lovable.dev/v1/chat/completions",
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
       {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "google/gemini-3-pro-image-preview",
-          messages: [{ role: "user", content }],
-          modalities: ["image", "text"],
+          contents: [{ role: "user", parts }],
+          generationConfig: { responseModalities: ["IMAGE"] },
         }),
       },
     );
 
     if (!aiRes.ok) {
       const text = await aiRes.text();
-      console.error("Lovable AI error", aiRes.status, text);
-      if (aiRes.status === 429) {
-        return new Response(
-          JSON.stringify({ error: "Rate limit exceeded, please try again in a moment." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-        );
-      }
-      if (aiRes.status === 402) {
-        return new Response(
-          JSON.stringify({ error: "AI credits exhausted. Please add funds in your Lovable workspace." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-        );
-      }
+      console.error("Google AI error", aiRes.status, text);
       return new Response(
         JSON.stringify({ error: `Image generation failed [${aiRes.status}]: ${text.slice(0, 500)}` }),
         { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
@@ -103,14 +92,18 @@ serve(async (req) => {
     }
 
     const json = await aiRes.json();
-    const imageUrl = json?.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-    if (!imageUrl) {
-      console.error("Missing image in AI response", JSON.stringify(json).slice(0, 500));
+    const respParts = json?.candidates?.[0]?.content?.parts ?? [];
+    const imgPart = respParts.find((p: any) => p?.inline_data || p?.inlineData);
+    const inline = imgPart?.inline_data ?? imgPart?.inlineData;
+    if (!inline?.data) {
+      console.error("Missing image in Gemini response", JSON.stringify(json).slice(0, 500));
       throw new Error("AI response missing image data");
     }
+    const mime = inline.mime_type ?? inline.mimeType ?? "image/png";
+    const imageDataUrl = `data:${mime};base64,${inline.data}`;
 
     return new Response(
-      JSON.stringify({ imageDataUrl: imageUrl }),
+      JSON.stringify({ imageDataUrl }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (e) {
