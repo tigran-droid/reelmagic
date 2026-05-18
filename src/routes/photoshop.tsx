@@ -61,7 +61,7 @@ function Photoshop() {
     .filter(Boolean)
     .slice(0, 2);
 
-  const goItem = (id: string) => navigate({ to: "/photoshop_/feed", search: { item: id } });
+  const goItem = (id: string) => navigate({ to: "/photoshop/feed", search: { item: id } });
 
   return (
     <MobileFrame>
