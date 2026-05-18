@@ -64,8 +64,8 @@ function PhotoshopFeed() {
         };
       });
     },
-    staleTime: 0,
-    refetchOnMount: "always",
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
   });
 
   const items = q.data ?? [];
@@ -190,7 +190,15 @@ function PhotoshopFeed() {
         className="h-dvh overflow-y-scroll snap-y snap-mandatory no-scrollbar"
       >
         {items.map((r, i) => (
-          <ReelCard key={r.id} reel={r} eager={i === 0} needsTap={needsTapIndex === i} onToggleAudio={() => toggleAudio(i)}>
+          <ReelCard
+            key={r.id}
+            reel={r}
+            eager={i === 0}
+            visible={Math.abs(i - activeIndex) <= 1}
+            active={i === activeIndex}
+            needsTap={needsTapIndex === i}
+            onToggleAudio={() => toggleAudio(i)}
+          >
             <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-black/50" />
             <div className="absolute right-3 bottom-44 flex flex-col items-center gap-4 text-white">
               <Action icon={<Heart className="size-7" fill="white" />} label="0" />
@@ -225,13 +233,17 @@ function PhotoshopFeed() {
   );
 }
 
-function ReelCard({ reel, eager, needsTap, onToggleAudio, children }: {
-  reel: Item; eager: boolean; needsTap: boolean; onToggleAudio: () => void; children: React.ReactNode;
+function ReelCard({ reel, eager, visible, active, needsTap, onToggleAudio, children }: {
+  reel: Item; eager: boolean; visible: boolean; active: boolean; needsTap: boolean; onToggleAudio: () => void; children: React.ReactNode;
 }) {
   return (
     <article onClick={onToggleAudio} className="relative h-dvh w-full snap-start snap-always overflow-hidden bg-black">
-      <PhotoCarousel reel={reel} eager={eager} />
-      {children}
+      {visible ? (
+        <>
+          <PhotoCarousel reel={reel} eager={eager} active={active} />
+          {children}
+        </>
+      ) : null}
       {needsTap && reel.audio && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div className="bg-black/60 text-white text-xs font-semibold px-3 py-1.5 rounded-full backdrop-blur-sm">
@@ -252,12 +264,12 @@ function Action({ icon, label }: { icon: React.ReactNode; label: string }) {
   );
 }
 
-function PhotoCarousel({ reel, eager }: { reel: Item; eager: boolean }) {
+function PhotoCarousel({ reel, eager, active }: { reel: Item; eager: boolean; active: boolean }) {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const [index, setIndex] = useState(0);
   const count = reel.images.length;
   useEffect(() => {
-    if (count <= 1) return;
+    if (count <= 1 || !active) return;
     const id = setInterval(() => {
       const el = scrollerRef.current;
       if (!el) return;
@@ -265,7 +277,7 @@ function PhotoCarousel({ reel, eager }: { reel: Item; eager: boolean }) {
       el.scrollTo({ left: next * el.clientWidth, behavior: "smooth" });
     }, 2500);
     return () => clearInterval(id);
-  }, [index, count]);
+  }, [index, count, active]);
   const onScroll = () => {
     const el = scrollerRef.current;
     if (!el) return;
@@ -286,6 +298,7 @@ function PhotoCarousel({ reel, eager }: { reel: Item; eager: boolean }) {
             src={src}
             alt={reel.title}
             loading={eager && i === 0 ? "eager" : "lazy"}
+            decoding="async"
             className="w-full h-full flex-shrink-0 snap-center object-cover"
           />
         ))}

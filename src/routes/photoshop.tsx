@@ -50,8 +50,8 @@ function Photoshop() {
       }));
       return sections;
     },
-    staleTime: 0,
-    refetchOnMount: "always",
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
   });
 
   const sections = q.data ?? [];
