@@ -69,7 +69,7 @@ serve(async (req) => {
       ...userImages.map((u: string) => dataUrlToInline(u)),
     ];
 
-    const model = "gemini-2.5-flash-image-preview";
+    const model = "gemini-2.5-flash-image";
     const aiRes = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
       {
