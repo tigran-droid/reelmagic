@@ -8,6 +8,8 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+const EDIT_MODEL = "gpt-image-1";
+
 function jsonResponse(body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -25,14 +27,33 @@ async function urlToDataUrl(url: string): Promise<string> {
   return `data:${mime};base64,${btoa(bin)}`;
 }
 
+function dataUrlToBlob(dataUrl: string): { blob: Blob; mimeType: string; extension: string } {
+  const match = /^data:([^;]+);base64,(.+)$/.exec(dataUrl);
+  if (!match) throw new Error("Invalid data URL");
+
+  const mimeType = match[1];
+  const base64 = match[2];
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+
+  const extension = mimeType.split("/")[1] || "png";
+  return {
+    blob: new Blob([bytes], { type: mimeType }),
+    mimeType,
+    extension,
+  };
+}
+
 export async function handleGenerateFromTemplateRequest(req: Request) {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const apiKey = Deno.env.get("GOOGLE_AI_STUDIO_API_KEY");
-    if (!apiKey) throw new Error("GOOGLE_AI_STUDIO_API_KEY not configured");
+    const apiKey = Deno.env.get("OPENAI_API_KEY");
+    if (!apiKey) throw new Error("OPENAI_API_KEY not configured");
 
     const { templateUrl, userImages, prompt } = await req.json();
     if (!templateUrl) throw new Error("templateUrl required");
@@ -42,98 +63,64 @@ export async function handleGenerateFromTemplateRequest(req: Request) {
     if (userImages.length > 4) throw new Error("Maximum 4 user photos");
 
     const templateDataUrl = await urlToDataUrl(templateUrl);
-
     const instruction =
       prompt ??
       [
-        "TASK: Identity swap into a target template photo.",
-        "",
-        "IMAGE ROLES:",
-        "- Image 1 is the TARGET TEMPLATE scene.",
-        "- Images 2+ are reference photos of the SAME real user.",
-        "",
-        "EDIT GOAL:",
-        "Replace the main person in Image 1 with the person from Images 2+.",
-        "Keep the template scene from Image 1: same pose, composition, camera angle, crop, lighting direction, wardrobe style, background, props, and color mood.",
-        "",
-        "CRITICAL:",
-        "- Do NOT recreate the original template person's face.",
-        "- Do NOT keep the template person's identity.",
-        "- The output must look like the uploaded user inserted into the template scene.",
-        "- Preserve the uploaded user's exact identity: face shape, eyes, brows, nose, lips, jawline, skin tone, hairline, hair color, and distinguishing marks.",
-        "- Preserve the uploaded user's age and gender presentation.",
-        "- If needed, adapt hair styling slightly to fit the template, but keep identity unmistakably the same.",
-        "- Match perspective, shadows, white balance, skin texture, and realism so the edit looks like a natural photo edit.",
-        "- Keep one person only in the main subject position unless the template clearly contains more than one main subject.",
-        "- Do not add new people, new accessories, or a different background.",
-        "- Do not stylize, beautify, cartoonize, or change ethnicity.",
-        "",
-        "OUTPUT:",
-        "A single photorealistic edited portrait where the uploaded user has replaced the template subject while the template scene remains intact.",
+        "Edit the FIRST image only.",
+        "The first image is the target template scene and body reference.",
+        "All remaining images are identity references of the same real user.",
+        "Replace the main person's face and identity in the first image with the uploaded user from the reference images.",
+        "Keep the original template composition, crop, pose, body position, lighting, background, clothing style, and overall scene intact.",
+        "Do not keep the original template person's face.",
+        "Do not create a new composition or a different person.",
+        "Preserve the uploaded user's exact facial identity, skin tone, hairline, hair color, age, and distinguishing features.",
+        "Blend the replacement naturally with matching perspective, shadows, skin texture, and white balance.",
+        "Return one photorealistic edited image.",
       ].join("\n");
 
-    // Build Gemini parts: instruction text + template image + user images
-    const dataUrlToInline = (dataUrl: string) => {
-      const m = /^data:([^;]+);base64,(.+)$/.exec(dataUrl);
-      if (!m) throw new Error("Invalid data URL");
-      return { inline_data: { mime_type: m[1], data: m[2] } };
-    };
+    const formData = new FormData();
+    formData.append("model", EDIT_MODEL);
+    formData.append("prompt", instruction);
+    formData.append("size", "1024x1536");
 
-    const parts: any[] = [
-      dataUrlToInline(templateDataUrl),
-      ...userImages.map((u: string) => dataUrlToInline(u)),
-      { text: instruction },
-    ];
+    const templateImage = dataUrlToBlob(templateDataUrl);
+    formData.append("image[]", templateImage.blob, `template.${templateImage.extension}`);
 
-    const model = "gemini-2.5-flash-image";
-    const aiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ role: "user", parts }],
-          generationConfig: { responseModalities: ["TEXT", "IMAGE"] },
-        }),
+    userImages.forEach((image: string, index: number) => {
+      const file = dataUrlToBlob(image);
+      formData.append("image[]", file.blob, `user-${index + 1}.${file.extension}`);
+    });
+
+    const aiRes = await fetch("https://api.openai.com/v1/images/edits", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
       },
-    );
+      body: formData,
+    });
 
     if (!aiRes.ok) {
       const text = await aiRes.text();
-      console.error("Google AI error", aiRes.status, text);
+      console.error("OpenAI image edit error", aiRes.status, text);
       return jsonResponse(
-        { error: `Image generation failed [${aiRes.status}]: ${text.slice(0, 500)}` },
+        { error: `Image edit failed [${aiRes.status}]: ${text.slice(0, 500)}` },
         502,
       );
     }
 
     const json = await aiRes.json();
-    const candidate = json?.candidates?.[0];
-    const respParts = candidate?.content?.parts ?? [];
-    const imgPart = respParts.find((p: any) => p?.inline_data || p?.inlineData);
-    const inline = imgPart?.inline_data ?? imgPart?.inlineData;
-    if (!inline?.data) {
-      console.error("Missing image in Gemini response", JSON.stringify(json).slice(0, 500));
-      const finishReason = candidate?.finishReason ?? null;
-      const finishMessage = candidate?.finishMessage ?? null;
+    const b64Json = json?.data?.[0]?.b64_json;
 
+    if (!b64Json) {
+      console.error("Missing image in edit response", JSON.stringify(json).slice(0, 500));
       return jsonResponse({
-        error:
-          finishReason === "IMAGE_OTHER"
-            ? "Couldn't generate a photo from this combination. Try a clearer face photo, a different template, or try again."
-            : finishMessage || "AI response missing image data",
-        errorCode:
-          finishReason === "IMAGE_OTHER"
-            ? "AI_RESPONSE_MISSING_IMAGE"
-            : "AI_IMAGE_GENERATION_FAILED",
+        error: json?.error?.message || "The image editor did not return an edited image for this request.",
+        errorCode: "AI_IMAGE_EDIT_NO_OUTPUT",
         fallback: true,
-        finishReason,
       });
     }
-    const mime = inline.mime_type ?? inline.mimeType ?? "image/png";
-    const imageDataUrl = `data:${mime};base64,${inline.data}`;
 
-    return jsonResponse({ imageDataUrl });
+    return jsonResponse({ imageDataUrl: `data:image/png;base64,${b64Json}` });
   } catch (e) {
     console.error("generate-from-template error:", e);
     return jsonResponse({ error: e instanceof Error ? e.message : "Unknown error" }, 500);
