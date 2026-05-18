@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { MobileFrame } from "@/components/MobileFrame";
-import { Aperture, ChevronRight, Sparkles, SlidersHorizontal } from "lucide-react";
+import { ChevronRight, Sparkles, SlidersHorizontal } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -79,7 +79,7 @@ function Photoshop() {
               <button
                 key={f.id}
                 onClick={() => goItem(f.id)}
-                className="flex-none w-56 aspect-[5/4] rounded-lg overflow-hidden relative bg-secondary snap-start ring-1 ring-border"
+                className="flex-none w-56 aspect-[5/4] rounded-md overflow-hidden relative bg-secondary snap-start ring-1 ring-border"
               >
                 <img src={f.image_url} alt={f.title} loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/15 to-transparent" />
@@ -89,9 +89,6 @@ function Photoshop() {
                   </div>
                 </div>
                 <div className="absolute bottom-3 left-3 right-3 text-left">
-                  <div className="text-white/80 text-[9px] font-bold uppercase tracking-widest flex items-center gap-1">
-                    <Aperture className="size-2.5" /> Photoshoot
-                  </div>
                   <div className="text-white text-base font-extrabold leading-tight">{f.title}</div>
                 </div>
               </button>
@@ -117,14 +114,11 @@ function Photoshop() {
                   <button
                     key={p.id}
                     onClick={() => goItem(p.id)}
-                    className="flex-none w-32 aspect-[4/5] snap-start rounded-lg overflow-hidden relative bg-secondary ring-1 ring-border"
+                    className="flex-none w-32 aspect-[5/6] snap-start rounded-md overflow-hidden relative bg-secondary ring-1 ring-border"
                   >
                     <img src={p.image_url} alt={p.title} loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/10 to-transparent" />
                     <div className="absolute bottom-3 left-3 right-3 text-left">
-                      <div className="text-white/80 text-[9px] font-bold uppercase tracking-widest flex items-center gap-1">
-                        <Aperture className="size-2.5" /> Photoshoot
-                      </div>
                       <div className="text-white text-sm font-extrabold leading-tight">{p.title}</div>
                     </div>
                   </button>

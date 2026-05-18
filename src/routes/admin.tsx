@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
-import { Upload, Image as ImageIcon, Music, Loader2, Trash2, Pencil, X, Check, Plus } from "lucide-react";
+import { Upload, Image as ImageIcon, Music, Loader2, Trash2, Pencil, X, Check, Plus, ArrowUp, ArrowDown } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AudioTrimmer } from "@/components/AudioTrimmer";
 
@@ -418,6 +418,20 @@ function SectionCard({ section, items, onChange }: {
     onChange();
   };
 
+  const sorted = [...items].sort((a, b) => a.position - b.position || a.created_at.localeCompare(b.created_at));
+
+  const moveItem = async (index: number, dir: -1 | 1) => {
+    const target = sorted[index];
+    const neighbor = sorted[index + dir];
+    if (!target || !neighbor) return;
+    const [{ error: e1 }, { error: e2 }] = await Promise.all([
+      supabase.from("photoshop_items").update({ position: neighbor.position }).eq("id", target.id),
+      supabase.from("photoshop_items").update({ position: target.position }).eq("id", neighbor.id),
+    ]);
+    if (e1 || e2) { alert((e1 ?? e2)!.message); return; }
+    onChange();
+  };
+
   return (
     <div className="bg-card border border-border rounded-2xl p-4 space-y-3">
       <div className="flex items-center gap-2">
@@ -442,13 +456,29 @@ function SectionCard({ section, items, onChange }: {
       </div>
 
       <div className="space-y-1.5">
-        {items.map((it) => (
+        {sorted.map((it, idx) => (
           <div key={it.id} className="flex items-center gap-2 p-1.5 rounded-lg bg-background border border-border">
             <img src={it.image_url} alt={it.title} className="size-10 rounded object-cover" />
             <div className="flex-1 min-w-0">
               <p className="text-xs font-semibold truncate">{it.title}</p>
               <p className="text-[10px] text-muted-foreground truncate">{it.hashtags.join(" ")} {it.song && `· ${it.song}`}</p>
             </div>
+            <button
+              onClick={() => moveItem(idx, -1)}
+              disabled={idx === 0}
+              className="p-1.5 text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:hover:text-muted-foreground"
+              aria-label="Move up"
+            >
+              <ArrowUp className="size-3.5" />
+            </button>
+            <button
+              onClick={() => moveItem(idx, 1)}
+              disabled={idx === sorted.length - 1}
+              className="p-1.5 text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:hover:text-muted-foreground"
+              aria-label="Move down"
+            >
+              <ArrowDown className="size-3.5" />
+            </button>
             <button onClick={() => deleteItem(it.id)} className="p-1.5 text-muted-foreground hover:text-destructive" aria-label="Delete photo">
               <Trash2 className="size-3.5" />
             </button>
