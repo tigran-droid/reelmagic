@@ -9,7 +9,11 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const MODEL = "veo-3.0-fast-generate-001";
+const VIDEO_MODELS = [
+  "veo-3.1-fast-generate-preview",
+  "veo-3.1-lite-generate-preview",
+  "veo-3.0-fast-generate-001",
+];
 const BASE = "https://generativelanguage.googleapis.com/v1beta";
 
 function jsonResponse(body: Record<string, unknown>, status = 200) {
@@ -25,6 +29,71 @@ function dataUrlToBase64(dataUrl: string): { base64: string; mimeType: string } 
   return { mimeType: m[1], base64: m[2] };
 }
 
+function extractModelFromOperationName(operationName: string | undefined): string | null {
+  if (!operationName) return null;
+  const match = operationName.match(/^models\/([^/]+)\/operations\//);
+  return match?.[1] ?? null;
+}
+
+async function startVideoOperation({
+  apiKey,
+  model,
+  prompt,
+  base64,
+  mimeType,
+}: {
+  apiKey: string;
+  model: string;
+  prompt: string;
+  base64: string;
+  mimeType: string;
+}) {
+  const startRes = await fetch(
+    `${BASE}/models/${model}:predictLongRunning?key=${apiKey}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        instances: [
+          {
+            prompt,
+            image: { bytesBase64Encoded: base64, mimeType },
+          },
+        ],
+        parameters: {
+          aspectRatio: "9:16",
+          personGeneration: "allow_adult",
+        },
+      }),
+    },
+  );
+
+  if (!startRes.ok) {
+    const text = await startRes.text();
+    return {
+      ok: false as const,
+      status: startRes.status,
+      errorText: text,
+    };
+  }
+
+  const startJson = await startRes.json();
+  const operationName = startJson?.name;
+  if (!operationName) {
+    return {
+      ok: false as const,
+      status: 502,
+      errorText: "No operation name returned",
+    };
+  }
+
+  return {
+    ok: true as const,
+    operationName,
+    model,
+  };
+}
+
 export async function handleGenerateVideoRequest(req: Request) {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -38,49 +107,51 @@ export async function handleGenerateVideoRequest(req: Request) {
     const action = body.action ?? "start";
 
     if (action === "start") {
-      const { imageDataUrl, prompt } = body;
+      const { imageDataUrl, prompt, model } = body;
       if (!imageDataUrl) throw new Error("imageDataUrl required");
       if (!prompt) throw new Error("prompt required");
 
       const { base64, mimeType } = dataUrlToBase64(imageDataUrl);
 
-      const startRes = await fetch(
-        `${BASE}/models/${MODEL}:predictLongRunning?key=${apiKey}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            instances: [
-              {
-                prompt,
-                image: { bytesBase64Encoded: base64, mimeType },
-              },
-            ],
-            parameters: {
-              aspectRatio: "9:16",
-              personGeneration: "allow_adult",
-            },
-          }),
-        },
-      );
+      const candidateModels = model
+        ? [model]
+        : VIDEO_MODELS;
 
-      if (!startRes.ok) {
-        const t = await startRes.text();
-        console.error("Veo start error", startRes.status, t);
-        return new Response(
-          JSON.stringify({
-            error: `Video generation failed to start [${startRes.status}]: ${t.slice(0, 500)}`,
-          }),
-          { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-        );
+      if (candidateModels.some((candidate) => !VIDEO_MODELS.includes(candidate))) {
+        throw new Error("Unsupported video model");
       }
-      const startJson = await startRes.json();
-      const operationName = startJson?.name;
-      if (!operationName) throw new Error("No operation name returned");
+
+      let lastFailure: { status: number; errorText: string; model: string } | null = null;
+
+      for (const candidateModel of candidateModels) {
+        const started = await startVideoOperation({
+          apiKey,
+          model: candidateModel,
+          prompt,
+          base64,
+          mimeType,
+        });
+
+        if (started.ok) {
+          return new Response(
+            JSON.stringify({ operationName: started.operationName, model: started.model }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
+
+        lastFailure = {
+          status: started.status,
+          errorText: started.errorText,
+          model: candidateModel,
+        };
+        console.error("Veo start error", candidateModel, started.status, started.errorText);
+      }
 
       return new Response(
-        JSON.stringify({ operationName }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        JSON.stringify({
+          error: `Video generation failed to start with available models. Last failure (${lastFailure?.model ?? "unknown"}) [${lastFailure?.status ?? 500}]: ${(lastFailure?.errorText ?? "Unknown error").slice(0, 500)}`,
+        }),
+        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
@@ -131,6 +202,8 @@ export async function handleGenerateVideoRequest(req: Request) {
         resp.raiMediaFilteredReasons ??
         [];
 
+      const currentModel = extractModelFromOperationName(operationName);
+
       if (!videoUri) {
         console.error("No video uri in response", JSON.stringify(json).slice(0, 800));
         return jsonResponse({
@@ -141,6 +214,8 @@ export async function handleGenerateVideoRequest(req: Request) {
           errorCode: mediaFilteredReasons.length > 0 ? "VIDEO_FILTERED" : "VIDEO_URL_MISSING",
           filtered: mediaFilteredReasons.length > 0,
           reasons: mediaFilteredReasons,
+          retryable: true,
+          model: currentModel,
         });
       }
 
