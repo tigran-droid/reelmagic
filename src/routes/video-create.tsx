@@ -195,7 +195,7 @@ function VideoCreatePage() {
             videoUrl = pollData.videoUrl;
             break;
           }
-          throw new Error("Video generation finished but no URL returned");
+          throw new Error(pollData?.error || "Video generation finished but no URL returned");
         }
       }
       if (!videoUrl) throw new Error("Video generation timed out");

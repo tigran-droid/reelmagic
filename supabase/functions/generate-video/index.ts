@@ -12,13 +12,20 @@ const corsHeaders = {
 const MODEL = "veo-3.0-fast-generate-001";
 const BASE = "https://generativelanguage.googleapis.com/v1beta";
 
+function jsonResponse(body: Record<string, unknown>, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
 function dataUrlToBase64(dataUrl: string): { base64: string; mimeType: string } {
   const m = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
   if (!m) throw new Error("Invalid image data URL");
   return { mimeType: m[1], base64: m[2] };
 }
 
-serve(async (req) => {
+export async function handleGenerateVideoRequest(req: Request) {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -100,10 +107,7 @@ serve(async (req) => {
       }
 
       if (json.error) {
-        return new Response(
-          JSON.stringify({ done: true, error: json.error.message ?? "Generation failed" }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-        );
+        return jsonResponse({ done: true, error: json.error.message ?? "Generation failed" });
       }
 
       // Locate the video URI from the response (shape varies slightly)
@@ -122,12 +126,22 @@ serve(async (req) => {
         first?.videoUri ??
         null;
 
+      const mediaFilteredReasons =
+        resp.generateVideoResponse?.raiMediaFilteredReasons ??
+        resp.raiMediaFilteredReasons ??
+        [];
+
       if (!videoUri) {
         console.error("No video uri in response", JSON.stringify(json).slice(0, 800));
-        return new Response(
-          JSON.stringify({ done: true, error: "Video URL missing in response" }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-        );
+        return jsonResponse({
+          done: true,
+          error:
+            mediaFilteredReasons[0] ||
+            "Video generation was blocked for this image. Please try a different photo.",
+          errorCode: mediaFilteredReasons.length > 0 ? "VIDEO_FILTERED" : "VIDEO_URL_MISSING",
+          filtered: mediaFilteredReasons.length > 0,
+          reasons: mediaFilteredReasons,
+        });
       }
 
       // Download the video bytes (Google URI needs the api key)
@@ -153,18 +167,14 @@ serve(async (req) => {
       if (upErr) throw new Error(`Storage upload failed: ${upErr.message}`);
       const { data: pub } = supabase.storage.from("video-files").getPublicUrl(path);
 
-      return new Response(
-        JSON.stringify({ done: true, videoUrl: pub.publicUrl }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+      return jsonResponse({ done: true, videoUrl: pub.publicUrl });
     }
 
     throw new Error(`Unknown action: ${action}`);
   } catch (e) {
     console.error("generate-video error:", e);
-    return new Response(
-      JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
+    return jsonResponse({ error: e instanceof Error ? e.message : "Unknown error" }, 500);
   }
-});
+}
+
+serve(handleGenerateVideoRequest);
