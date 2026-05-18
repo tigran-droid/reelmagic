@@ -81,7 +81,8 @@ export async function handleGenerateFromTemplateRequest(req: Request) {
     const formData = new FormData();
     formData.append("model", EDIT_MODEL);
     formData.append("prompt", instruction);
-    formData.append("size", "1024x1536");
+    formData.append("size", "1024x1024");
+    formData.append("quality", "low");
 
     const templateImage = dataUrlToBlob(templateDataUrl);
     formData.append("image[]", templateImage.blob, `template.${templateImage.extension}`);
