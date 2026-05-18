@@ -140,6 +140,7 @@ function CreatePage() {
         }
         throw new Error(msg);
       }
+      if (data?.fallback && data?.error) throw new Error(data.error);
       if (data?.error) throw new Error(data.error);
       if (!data?.imageDataUrl) throw new Error("No image returned");
       setMessages((m) =>
