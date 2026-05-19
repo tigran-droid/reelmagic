@@ -10,6 +10,8 @@ const corsHeaders = {
 
 const GEMINI_MODEL = "gemini-3.1-flash-image-preview";
 const OPENAI_EDIT_MODEL = "gpt-image-1";
+const MAX_IMAGE_BYTES = 2_500_000;
+const GEMINI_TIMEOUT_MS = 55_000;
 
 function jsonResponse(body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -47,6 +49,28 @@ function dataUrlToBlob(dataUrl: string): { blob: Blob; mimeType: string; extensi
   };
 }
 
+async function normalizeDataUrl(dataUrl: string): Promise<string> {
+  const res = await fetch(dataUrl);
+  const blob = await res.blob();
+  if (blob.size <= MAX_IMAGE_BYTES) return dataUrl;
+
+  const bitmap = await createImageBitmap(blob);
+  const scale = Math.min(1, 1400 / Math.max(bitmap.width, bitmap.height, 1));
+  const width = Math.max(1, Math.round(bitmap.width * scale));
+  const height = Math.max(1, Math.round(bitmap.height * scale));
+
+  const canvas = new OffscreenCanvas(width, height);
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return dataUrl;
+
+  ctx.drawImage(bitmap, 0, 0, width, height);
+  const out = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.82 });
+  const buf = new Uint8Array(await out.arrayBuffer());
+  let bin = "";
+  for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i]);
+  return `data:image/jpeg;base64,${btoa(bin)}`;
+}
+
 export async function handleGenerateFromTemplateRequest(req: Request) {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -66,7 +90,10 @@ export async function handleGenerateFromTemplateRequest(req: Request) {
     }
     if (userImages.length > 4) throw new Error("Maximum 4 user photos");
 
-    const templateDataUrl = await urlToDataUrl(templateUrl);
+    const templateDataUrl = await normalizeDataUrl(await urlToDataUrl(templateUrl));
+    const normalizedUserImages = await Promise.all(
+      userImages.map((img: string) => normalizeDataUrl(img)),
+    );
     const instruction =
       prompt ??
       [
@@ -89,14 +116,14 @@ export async function handleGenerateFromTemplateRequest(req: Request) {
       const tpl = dataUrlToBlob(templateDataUrl);
       const tplB64 = templateDataUrl.split(",")[1];
       parts.push({ inlineData: { mimeType: tpl.mimeType, data: tplB64 } });
-      for (const img of userImages) {
+      for (const img of normalizedUserImages) {
         const m = /^data:([^;]+);base64,(.+)$/.exec(img);
         if (!m) continue;
         parts.push({ inlineData: { mimeType: m[1], data: m[2] } });
       }
 
       const geminiCtrl = new AbortController();
-      const geminiTimer = setTimeout(() => geminiCtrl.abort(), 110_000);
+      const geminiTimer = setTimeout(() => geminiCtrl.abort(), GEMINI_TIMEOUT_MS);
       let geminiRes: Response;
       try {
         geminiRes = await fetch(
@@ -114,11 +141,7 @@ export async function handleGenerateFromTemplateRequest(req: Request) {
       } catch (err) {
         clearTimeout(geminiTimer);
         console.error("Gemini fetch failed/timeout", err);
-        return jsonResponse({
-          error: "Image edit timed out. Please try again with smaller photos.",
-          errorCode: "TIMEOUT",
-          fallback: true,
-        }, 504);
+        geminiRes = new Response(null, { status: 504, statusText: "Gemini timeout" });
       }
       clearTimeout(geminiTimer);
 
@@ -164,7 +187,7 @@ export async function handleGenerateFromTemplateRequest(req: Request) {
     const templateImage = dataUrlToBlob(templateDataUrl);
     formData.append("image[]", templateImage.blob, `template.${templateImage.extension}`);
 
-    userImages.forEach((image: string, index: number) => {
+    normalizedUserImages.forEach((image: string, index: number) => {
       const file = dataUrlToBlob(image);
       formData.append("image[]", file.blob, `user-${index + 1}.${file.extension}`);
     });

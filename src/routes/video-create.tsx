@@ -54,6 +54,8 @@ const VIDEO_MODELS = [
   "veo-3.1-lite-generate-preview",
   "veo-3.0-fast-generate-001",
 ] as const;
+const UPLOAD_IMAGE_MAX_EDGE = 1536;
+const UPLOAD_IMAGE_QUALITY = 0.82;
 
 function uid() {
   return Math.random().toString(36).slice(2);
@@ -66,6 +68,41 @@ function fileToDataUrl(file: File): Promise<string> {
     r.onerror = () => reject(r.error);
     r.readAsDataURL(file);
   });
+}
+
+function loadImage(dataUrl: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("Failed to load selected image"));
+    img.src = dataUrl;
+  });
+}
+
+async function optimizeImageForUpload(file: File): Promise<string> {
+  const originalDataUrl = await fileToDataUrl(file);
+
+  try {
+    const image = await loadImage(originalDataUrl);
+    const longestEdge = Math.max(image.naturalWidth, image.naturalHeight);
+    const scale = Math.min(1, UPLOAD_IMAGE_MAX_EDGE / Math.max(longestEdge, 1));
+    const width = Math.max(1, Math.round(image.naturalWidth * scale));
+    const height = Math.max(1, Math.round(image.naturalHeight * scale));
+
+    if (scale === 1 && file.size < 1_500_000) return originalDataUrl;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return originalDataUrl;
+
+    ctx.drawImage(image, 0, 0, width, height);
+    return canvas.toDataURL("image/jpeg", UPLOAD_IMAGE_QUALITY);
+  } catch {
+    return originalDataUrl;
+  }
 }
 
 function VideoCreatePage() {
@@ -120,7 +157,7 @@ function VideoCreatePage() {
     let statusId = uid();
     setMessages((m) => [
       ...m,
-      { id: statusId, role: "assistant", kind: "status", text: "Generating your photo…" },
+      { id: statusId, role: "assistant", kind: "status", text: "Optimizing photos and generating your photo…" },
     ]);
 
     try {
@@ -248,10 +285,13 @@ function VideoCreatePage() {
       );
     } catch (e) {
       const text = e instanceof Error ? e.message : "Failed";
+      const friendlyText = /timed out/i.test(text)
+        ? "Image generation took too long. Try 1–2 clear face photos and avoid very large uploads."
+        : text;
       setMessages((m) =>
         m
           .filter((x) => x.id !== statusId)
-          .concat({ id: uid(), role: "assistant", kind: "error", text }),
+          .concat({ id: uid(), role: "assistant", kind: "error", text: friendlyText }),
       );
     } finally {
       setBusy(false);
@@ -262,7 +302,7 @@ function VideoCreatePage() {
     const files = Array.from(e.target.files ?? []).slice(0, 4);
     e.target.value = "";
     if (files.length === 0) return;
-    const urls = await Promise.all(files.map(fileToDataUrl));
+    const urls = await Promise.all(files.map(optimizeImageForUpload));
     setUserImages(urls);
     sessionStorage.setItem(USER_IMAGES_KEY, JSON.stringify(urls));
     setMessages((m) => [
