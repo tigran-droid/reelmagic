@@ -8,10 +8,8 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const GEMINI_MODEL = "gemini-3.1-flash-image-preview";
-const OPENAI_EDIT_MODEL = "gpt-image-1";
+const FAL_MODEL = "fal-ai/bytedance/seedream/v4/edit";
 const MAX_IMAGE_BYTES = 2_500_000;
-const GEMINI_TIMEOUT_MS = 55_000;
 
 function jsonResponse(body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -30,45 +28,30 @@ async function urlToDataUrl(url: string): Promise<string> {
   return `data:${mime};base64,${btoa(bin)}`;
 }
 
-function dataUrlToBlob(dataUrl: string): { blob: Blob; mimeType: string; extension: string } {
-  const match = /^data:([^;]+);base64,(.+)$/.exec(dataUrl);
-  if (!match) throw new Error("Invalid data URL");
-
-  const mimeType = match[1];
-  const base64 = match[2];
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-
-  const extension = mimeType.split("/")[1] || "png";
-  return {
-    blob: new Blob([bytes], { type: mimeType }),
-    mimeType,
-    extension,
-  };
-}
-
 async function normalizeDataUrl(dataUrl: string): Promise<string> {
-  const res = await fetch(dataUrl);
-  const blob = await res.blob();
-  if (blob.size <= MAX_IMAGE_BYTES) return dataUrl;
+  try {
+    const res = await fetch(dataUrl);
+    const blob = await res.blob();
+    if (blob.size <= MAX_IMAGE_BYTES) return dataUrl;
 
-  const bitmap = await createImageBitmap(blob);
-  const scale = Math.min(1, 1400 / Math.max(bitmap.width, bitmap.height, 1));
-  const width = Math.max(1, Math.round(bitmap.width * scale));
-  const height = Math.max(1, Math.round(bitmap.height * scale));
+    const bitmap = await createImageBitmap(blob);
+    const scale = Math.min(1, 1400 / Math.max(bitmap.width, bitmap.height, 1));
+    const width = Math.max(1, Math.round(bitmap.width * scale));
+    const height = Math.max(1, Math.round(bitmap.height * scale));
 
-  const canvas = new OffscreenCanvas(width, height);
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return dataUrl;
+    const canvas = new OffscreenCanvas(width, height);
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return dataUrl;
 
-  ctx.drawImage(bitmap, 0, 0, width, height);
-  const out = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.82 });
-  const buf = new Uint8Array(await out.arrayBuffer());
-  let bin = "";
-  for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i]);
-  return `data:image/jpeg;base64,${btoa(bin)}`;
+    ctx.drawImage(bitmap, 0, 0, width, height);
+    const out = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.82 });
+    const buf = new Uint8Array(await out.arrayBuffer());
+    let bin = "";
+    for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i]);
+    return `data:image/jpeg;base64,${btoa(bin)}`;
+  } catch {
+    return dataUrl;
+  }
 }
 
 export async function handleGenerateFromTemplateRequest(req: Request) {
@@ -77,11 +60,8 @@ export async function handleGenerateFromTemplateRequest(req: Request) {
   }
 
   try {
-    const googleKey = Deno.env.get("GOOGLE_AI_STUDIO_API_KEY");
-    const openaiKey = Deno.env.get("OPENAI_API_KEY");
-    if (!googleKey && !openaiKey) {
-      throw new Error("No image-edit API key configured (GOOGLE_AI_STUDIO_API_KEY or OPENAI_API_KEY)");
-    }
+    const falKey = Deno.env.get("FAL_AI_API_KEY");
+    if (!falKey) throw new Error("FAL_AI_API_KEY not configured");
 
     const { templateUrl, userImages, prompt } = await req.json();
     if (!templateUrl) throw new Error("templateUrl required");
@@ -94,6 +74,7 @@ export async function handleGenerateFromTemplateRequest(req: Request) {
     const normalizedUserImages = await Promise.all(
       userImages.map((img: string) => normalizeDataUrl(img)),
     );
+
     const instruction =
       prompt ??
       [
@@ -109,129 +90,56 @@ export async function handleGenerateFromTemplateRequest(req: Request) {
         "Return one photorealistic edited image.",
       ].join("\n");
 
-    // Try Google Gemini directly (using user's own API key — bypasses Lovable AI credits
-    // and has far fewer false-positive safety blocks on normal user faces).
-    if (googleKey) {
-      const parts: Array<Record<string, unknown>> = [{ text: instruction }];
-      const tpl = dataUrlToBlob(templateDataUrl);
-      const tplB64 = templateDataUrl.split(",")[1];
-      parts.push({ inlineData: { mimeType: tpl.mimeType, data: tplB64 } });
-      for (const img of normalizedUserImages) {
-        const m = /^data:([^;]+);base64,(.+)$/.exec(img);
-        if (!m) continue;
-        parts.push({ inlineData: { mimeType: m[1], data: m[2] } });
-      }
+    const image_urls = [templateDataUrl, ...normalizedUserImages];
 
-      const geminiCtrl = new AbortController();
-      const geminiTimer = setTimeout(() => geminiCtrl.abort(), GEMINI_TIMEOUT_MS);
-      let geminiRes: Response;
-      try {
-        geminiRes = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${googleKey}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              contents: [{ parts }],
-              generationConfig: { responseModalities: ["IMAGE", "TEXT"] },
-            }),
-            signal: geminiCtrl.signal,
-          },
-        );
-      } catch (err) {
-        clearTimeout(geminiTimer);
-        console.error("Gemini fetch failed/timeout", err);
-        geminiRes = new Response(null, { status: 504, statusText: "Gemini timeout" });
-      }
-      clearTimeout(geminiTimer);
-
-      if (geminiRes.ok) {
-        const json = await geminiRes.json();
-        const respParts: any[] = json?.candidates?.[0]?.content?.parts ?? [];
-        const imgPart = respParts.find((p) => p?.inlineData?.data || p?.inline_data?.data);
-        const inline = imgPart?.inlineData ?? imgPart?.inline_data;
-        if (inline?.data) {
-          const mime = inline.mimeType || inline.mime_type || "image/png";
-          return jsonResponse({ imageDataUrl: `data:${mime};base64,${inline.data}` });
-        }
-        console.error("Gemini returned no image", JSON.stringify(json).slice(0, 500));
-      } else {
-        const text = await geminiRes.text();
-        console.error("Gemini image edit error", geminiRes.status, text);
-        if (geminiRes.status === 429) {
-          return jsonResponse({
-            error: "Rate limit reached. Please try again in a moment.",
-            errorCode: "RATE_LIMITED",
-            fallback: true,
-          });
-        }
-        // fall through to OpenAI fallback
-      }
-    }
-
-    // Fallback: OpenAI gpt-image-1
-    if (!openaiKey) {
-      return jsonResponse({
-        error: "Image edit failed and no fallback provider is configured.",
-        errorCode: "AI_IMAGE_EDIT_FAILED",
-        fallback: true,
-      });
-    }
-
-    const formData = new FormData();
-    formData.append("model", OPENAI_EDIT_MODEL);
-    formData.append("prompt", instruction);
-    formData.append("size", "1024x1024");
-    formData.append("quality", "low");
-
-    const templateImage = dataUrlToBlob(templateDataUrl);
-    formData.append("image[]", templateImage.blob, `template.${templateImage.extension}`);
-
-    normalizedUserImages.forEach((image: string, index: number) => {
-      const file = dataUrlToBlob(image);
-      formData.append("image[]", file.blob, `user-${index + 1}.${file.extension}`);
-    });
-
-    const aiRes = await fetch("https://api.openai.com/v1/images/edits", {
+    const falRes = await fetch(`https://fal.run/${FAL_MODEL}`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${openaiKey}` },
-      body: formData,
+      headers: {
+        Authorization: `Key ${falKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        prompt: instruction,
+        image_urls,
+        num_images: 1,
+        max_images: 1,
+        enable_safety_checker: false,
+      }),
     });
 
-    if (!aiRes.ok) {
-      const text = await aiRes.text();
-      console.error("OpenAI image edit error", aiRes.status, text);
-      let parsed: any = null;
-      try { parsed = JSON.parse(text); } catch { /* ignore */ }
-      const code = parsed?.error?.code;
-      const message = parsed?.error?.message;
-      if (code === "moderation_blocked") {
-        return jsonResponse({
-          error: "The photo was blocked by the image editor's safety system. Please try a different photo.",
-          errorCode: "MODERATION_BLOCKED",
-          fallback: true,
-        });
-      }
+    if (!falRes.ok) {
+      const text = await falRes.text();
+      console.error("fal.ai seedream error", falRes.status, text);
       return jsonResponse({
-        error: message || `Image edit failed [${aiRes.status}]`,
-        errorCode: code || "AI_IMAGE_EDIT_FAILED",
+        error: `Image edit failed [${falRes.status}]: ${text.slice(0, 300)}`,
+        errorCode: falRes.status === 429 ? "RATE_LIMITED" : "AI_IMAGE_EDIT_FAILED",
         fallback: true,
-      });
+      }, falRes.status === 429 ? 200 : 200);
     }
 
-    const json = await aiRes.json();
-    const b64Json = json?.data?.[0]?.b64_json;
-
-    if (!b64Json) {
-      console.error("Missing image in edit response", JSON.stringify(json).slice(0, 500));
+    const json = await falRes.json();
+    const imageUrl = json?.images?.[0]?.url ?? json?.image?.url;
+    if (!imageUrl) {
+      console.error("fal.ai returned no image", JSON.stringify(json).slice(0, 500));
       return jsonResponse({
-        error: json?.error?.message || "The image editor did not return an edited image for this request.",
+        error: "The image editor did not return an image.",
         errorCode: "AI_IMAGE_EDIT_NO_OUTPUT",
         fallback: true,
       });
     }
 
-    return jsonResponse({ imageDataUrl: `data:image/png;base64,${b64Json}` });
+    // Return either remote URL or fetch and inline if you want data URL.
+    // Client expects imageDataUrl — fetch and inline.
+    let imageDataUrl = imageUrl;
+    if (imageUrl.startsWith("http")) {
+      try {
+        imageDataUrl = await urlToDataUrl(imageUrl);
+      } catch (e) {
+        console.error("Failed to inline fal image", e);
+      }
+    }
+
+    return jsonResponse({ imageDataUrl });
   } catch (e) {
     console.error("generate-from-template error:", e);
     return jsonResponse({ error: e instanceof Error ? e.message : "Unknown error" }, 500);

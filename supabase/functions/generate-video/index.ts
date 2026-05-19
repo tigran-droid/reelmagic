@@ -9,12 +9,7 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const VIDEO_MODELS = [
-  "veo-3.1-fast-generate-preview",
-  "veo-3.1-lite-generate-preview",
-  "veo-3.0-fast-generate-001",
-];
-const BASE = "https://generativelanguage.googleapis.com/v1beta";
+const FAL_VIDEO_MODEL = "fal-ai/wan/v2.5/image-to-video";
 
 function jsonResponse(body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -23,214 +18,122 @@ function jsonResponse(body: Record<string, unknown>, status = 200) {
   });
 }
 
-function dataUrlToBase64(dataUrl: string): { base64: string; mimeType: string } {
-  const m = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
-  if (!m) throw new Error("Invalid image data URL");
-  return { mimeType: m[1], base64: m[2] };
-}
-
-function extractModelFromOperationName(operationName: string | undefined): string | null {
-  if (!operationName) return null;
-  const match = operationName.match(/^models\/([^/]+)\/operations\//);
-  return match?.[1] ?? null;
-}
-
-async function startVideoOperation({
-  apiKey,
-  model,
-  prompt,
-  base64,
-  mimeType,
-}: {
-  apiKey: string;
-  model: string;
-  prompt: string;
-  base64: string;
-  mimeType: string;
-}) {
-  const startRes = await fetch(
-    `${BASE}/models/${model}:predictLongRunning?key=${apiKey}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        instances: [
-          {
-            prompt,
-            image: { bytesBase64Encoded: base64, mimeType },
-          },
-        ],
-        parameters: {
-          aspectRatio: "9:16",
-          personGeneration: "allow_adult",
-        },
-      }),
-    },
-  );
-
-  if (!startRes.ok) {
-    const text = await startRes.text();
-    return {
-      ok: false as const,
-      status: startRes.status,
-      errorText: text,
-    };
-  }
-
-  const startJson = await startRes.json();
-  const operationName = startJson?.name;
-  if (!operationName) {
-    return {
-      ok: false as const,
-      status: 502,
-      errorText: "No operation name returned",
-    };
-  }
-
-  return {
-    ok: true as const,
-    operationName,
-    model,
-  };
-}
-
 export async function handleGenerateVideoRequest(req: Request) {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const apiKey = Deno.env.get("GOOGLE_AI_STUDIO_API_KEY");
-    if (!apiKey) throw new Error("GOOGLE_AI_STUDIO_API_KEY not configured");
+    const falKey = Deno.env.get("FAL_AI_API_KEY");
+    if (!falKey) throw new Error("FAL_AI_API_KEY not configured");
 
     const body = await req.json();
     const action = body.action ?? "start";
 
     if (action === "start") {
-      const { imageDataUrl, prompt, model } = body;
+      const { imageDataUrl, prompt } = body;
       if (!imageDataUrl) throw new Error("imageDataUrl required");
       if (!prompt) throw new Error("prompt required");
 
-      const { base64, mimeType } = dataUrlToBase64(imageDataUrl);
-
-      const candidateModels = model
-        ? [model]
-        : VIDEO_MODELS;
-
-      if (candidateModels.some((candidate) => !VIDEO_MODELS.includes(candidate))) {
-        throw new Error("Unsupported video model");
-      }
-
-      let lastFailure: { status: number; errorText: string; model: string } | null = null;
-
-      for (const candidateModel of candidateModels) {
-        const started = await startVideoOperation({
-          apiKey,
-          model: candidateModel,
+      const startRes = await fetch(`https://queue.fal.run/${FAL_VIDEO_MODEL}`, {
+        method: "POST",
+        headers: {
+          Authorization: `Key ${falKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
           prompt,
-          base64,
-          mimeType,
-        });
+          image_url: imageDataUrl,
+        }),
+      });
 
-        if (started.ok) {
-          return new Response(
-            JSON.stringify({ operationName: started.operationName, model: started.model }),
-            { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-          );
-        }
-
-        lastFailure = {
-          status: started.status,
-          errorText: started.errorText,
-          model: candidateModel,
-        };
-        console.error("Veo start error", candidateModel, started.status, started.errorText);
+      if (!startRes.ok) {
+        const text = await startRes.text();
+        console.error("fal.ai wan start error", startRes.status, text);
+        return jsonResponse({
+          error: `Video generation failed to start [${startRes.status}]: ${text.slice(0, 300)}`,
+        }, 502);
       }
 
-      return new Response(
-        JSON.stringify({
-          error: `Video generation failed to start with available models. Last failure (${lastFailure?.model ?? "unknown"}) [${lastFailure?.status ?? 500}]: ${(lastFailure?.errorText ?? "Unknown error").slice(0, 500)}`,
-        }),
-        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+      const startJson = await startRes.json();
+      const requestId = startJson?.request_id;
+      if (!requestId) {
+        return jsonResponse({ error: "No request_id returned from fal.ai" }, 502);
+      }
+
+      return jsonResponse({
+        operationName: `${FAL_VIDEO_MODEL}:${requestId}`,
+        model: FAL_VIDEO_MODEL,
+      });
     }
 
     if (action === "poll") {
       const { operationName } = body;
       if (!operationName) throw new Error("operationName required");
 
-      const pollRes = await fetch(
-        `${BASE}/${operationName}?key=${apiKey}`,
-        { method: "GET" },
+      const sep = operationName.lastIndexOf(":");
+      if (sep === -1) throw new Error("Invalid operationName");
+      const model = operationName.slice(0, sep);
+      const requestId = operationName.slice(sep + 1);
+
+      const statusRes = await fetch(
+        `https://queue.fal.run/${model}/requests/${requestId}/status`,
+        { headers: { Authorization: `Key ${falKey}` } },
       );
-      if (!pollRes.ok) {
-        const t = await pollRes.text();
-        console.error("Veo poll error", pollRes.status, t);
-        throw new Error(`Poll failed [${pollRes.status}]: ${t.slice(0, 300)}`);
-      }
-      const json = await pollRes.json();
 
-      if (!json.done) {
-        return new Response(
-          JSON.stringify({ done: false }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-        );
+      if (!statusRes.ok) {
+        const t = await statusRes.text();
+        console.error("fal.ai status error", statusRes.status, t);
+        throw new Error(`Poll failed [${statusRes.status}]: ${t.slice(0, 300)}`);
       }
 
-      if (json.error) {
-        return jsonResponse({ done: true, error: json.error.message ?? "Generation failed" });
+      const statusJson = await statusRes.json();
+      const status = statusJson?.status;
+
+      if (status === "IN_QUEUE" || status === "IN_PROGRESS") {
+        return jsonResponse({ done: false });
       }
 
-      // Locate the video URI from the response (shape varies slightly)
-      const resp = json.response ?? {};
-      const samples =
-        resp.generateVideoResponse?.generatedSamples ??
-        resp.generatedSamples ??
-        resp.generated_videos ??
-        resp.videos ??
-        [];
-      const first = samples[0];
-      const videoUri =
-        first?.video?.uri ??
-        first?.video?.url ??
-        first?.uri ??
-        first?.videoUri ??
-        null;
-
-      const mediaFilteredReasons =
-        resp.generateVideoResponse?.raiMediaFilteredReasons ??
-        resp.raiMediaFilteredReasons ??
-        [];
-
-      const currentModel = extractModelFromOperationName(operationName);
-
-      if (!videoUri) {
-        console.error("No video uri in response", JSON.stringify(json).slice(0, 800));
+      if (status !== "COMPLETED") {
         return jsonResponse({
           done: true,
-          error:
-            mediaFilteredReasons[0] ||
-            "Video generation was blocked for this image. Please try a different photo.",
-          errorCode: mediaFilteredReasons.length > 0 ? "VIDEO_FILTERED" : "VIDEO_URL_MISSING",
-          filtered: mediaFilteredReasons.length > 0,
-          reasons: mediaFilteredReasons,
+          error: `Video generation ${String(status).toLowerCase() || "failed"}.`,
+          errorCode: "VIDEO_FAILED",
           retryable: true,
-          model: currentModel,
+          model,
         });
       }
 
-      // Download the video bytes (Google URI needs the api key)
-      const fetchUrl = videoUri.includes("?")
-        ? `${videoUri}&key=${apiKey}`
-        : `${videoUri}?key=${apiKey}`;
-      const vidRes = await fetch(fetchUrl);
+      // Fetch result
+      const resultRes = await fetch(
+        `https://queue.fal.run/${model}/requests/${requestId}`,
+        { headers: { Authorization: `Key ${falKey}` } },
+      );
+      if (!resultRes.ok) {
+        const t = await resultRes.text();
+        throw new Error(`Result fetch failed [${resultRes.status}]: ${t.slice(0, 200)}`);
+      }
+      const resultJson = await resultRes.json();
+      const videoUri = resultJson?.video?.url ?? resultJson?.video_url ?? resultJson?.url;
+      if (!videoUri) {
+        console.error("fal.ai no video", JSON.stringify(resultJson).slice(0, 500));
+        return jsonResponse({
+          done: true,
+          error: "Video generation completed but no video URL returned.",
+          errorCode: "VIDEO_URL_MISSING",
+          retryable: true,
+          model,
+        });
+      }
+
+      // Download and upload to storage
+      const vidRes = await fetch(videoUri);
       if (!vidRes.ok) {
         const t = await vidRes.text();
-        throw new Error(`Failed to download generated video [${vidRes.status}]: ${t.slice(0, 200)}`);
+        throw new Error(`Failed to download video [${vidRes.status}]: ${t.slice(0, 200)}`);
       }
       const bytes = new Uint8Array(await vidRes.arrayBuffer());
 
-      // Upload to Supabase storage
       const supabase = createClient(
         Deno.env.get("SUPABASE_URL")!,
         Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
