@@ -240,6 +240,8 @@ function VideoCreatePage() {
         if (startData?.error) throw new Error(startData.error);
         const operationName: string | undefined = startData?.operationName;
         if (!operationName) throw new Error("No operation name returned");
+        const statusUrl: string | undefined = startData?.statusUrl;
+        const responseUrl: string | undefined = startData?.responseUrl;
 
         const startTs = Date.now();
         let shouldTryNextModel = false;
@@ -248,7 +250,7 @@ function VideoCreatePage() {
           await new Promise((r) => setTimeout(r, 6000));
           const { data: pollData, error: pollErr } = await supabase.functions.invoke(
             "generate-video",
-            { body: { action: "poll", operationName } },
+            { body: { action: "poll", operationName, statusUrl, responseUrl } },
           );
           if (pollErr) throw new Error(pollErr.message || "Polling failed");
 

@@ -64,11 +64,13 @@ export async function handleGenerateVideoRequest(req: Request) {
       return jsonResponse({
         operationName: `${FAL_VIDEO_MODEL}:${requestId}`,
         model: FAL_VIDEO_MODEL,
+        statusUrl: startJson?.status_url,
+        responseUrl: startJson?.response_url,
       });
     }
 
     if (action === "poll") {
-      const { operationName } = body;
+      const { operationName, statusUrl, responseUrl } = body;
       if (!operationName) throw new Error("operationName required");
 
       const sep = operationName.lastIndexOf(":");
@@ -76,10 +78,18 @@ export async function handleGenerateVideoRequest(req: Request) {
       const model = operationName.slice(0, sep);
       const requestId = operationName.slice(sep + 1);
 
-      const statusRes = await fetch(
-        `https://queue.fal.run/${model}/requests/${requestId}/status`,
-        { headers: { Authorization: `Key ${falKey}` } },
-      );
+      // fal queue status path uses the app namespace (e.g. fal-ai/wan), not the full
+      // model path. Prefer the statusUrl returned at submission; otherwise derive it
+      // from the first two segments of the model id.
+      const appNs = model.split("/").slice(0, 2).join("/");
+      const statusEndpoint =
+        statusUrl || `https://queue.fal.run/${appNs}/requests/${requestId}/status`;
+      const resultEndpoint =
+        responseUrl || `https://queue.fal.run/${appNs}/requests/${requestId}`;
+
+      const statusRes = await fetch(statusEndpoint, {
+        headers: { Authorization: `Key ${falKey}` },
+      });
 
       if (!statusRes.ok) {
         const t = await statusRes.text();
@@ -105,10 +115,9 @@ export async function handleGenerateVideoRequest(req: Request) {
       }
 
       // Fetch result
-      const resultRes = await fetch(
-        `https://queue.fal.run/${model}/requests/${requestId}`,
-        { headers: { Authorization: `Key ${falKey}` } },
-      );
+      const resultRes = await fetch(resultEndpoint, {
+        headers: { Authorization: `Key ${falKey}` },
+      });
       if (!resultRes.ok) {
         const t = await resultRes.text();
         throw new Error(`Result fetch failed [${resultRes.status}]: ${t.slice(0, 200)}`);
