@@ -70,20 +70,36 @@ export async function handleGenerateVideoRequest(req: Request) {
     const action = body.action ?? "start";
 
     if (action === "start") {
-      const { imageDataUrl, prompt } = body;
+      const { imageDataUrl, prompt, duration, resolution } = body;
       if (!imageDataUrl) throw new Error("imageDataUrl required");
       if (!prompt) throw new Error("prompt required");
 
-      const startRes = await fetch(`https://queue.fal.run/${FAL_VIDEO_MODEL}`, {
+      // Cheapest config only. No upscaling, no enhancement, no prompt rewriting.
+      const videoDuration = Number(duration) === 10 ? 10 : 5;
+      const videoResolution =
+        resolution === "720p" || resolution === "1080p" ? resolution : "480p";
+      const falEndpoint = `https://queue.fal.run/${FAL_VIDEO_MODEL}`;
+      const falPayload = {
+        prompt,
+        image_url: imageDataUrl,
+        duration: videoDuration,
+        resolution: videoResolution,
+      };
+      console.log("[generate-video] start", {
+        endpoint: falEndpoint,
+        model: FAL_VIDEO_MODEL,
+        duration: videoDuration,
+        resolution: videoResolution,
+        promptLength: String(prompt).length,
+      });
+
+      const startRes = await fetch(falEndpoint, {
         method: "POST",
         headers: {
           Authorization: `Key ${falKey}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          prompt,
-          image_url: imageDataUrl,
-        }),
+        body: JSON.stringify(falPayload),
       });
 
       if (!startRes.ok) {
@@ -97,6 +113,12 @@ export async function handleGenerateVideoRequest(req: Request) {
       const startJson = await startRes.json();
       const model = startJson?.model ?? FAL_VIDEO_MODEL;
       const requestId = startJson?.request_id ?? startJson?.requestId ?? startJson?.id;
+      console.log("[generate-video] queued", {
+        requestId,
+        model,
+        duration: videoDuration,
+        resolution: videoResolution,
+      });
       if (!requestId) {
         return jsonResponse({ error: "No request_id returned from fal.ai" }, 502);
       }
@@ -157,6 +179,12 @@ export async function handleGenerateVideoRequest(req: Request) {
         throw new Error(`Result fetch failed [${resultRes.status}]: ${t.slice(0, 200)}`);
       }
       const resultJson = await resultRes.json();
+      console.log("[generate-video] result", {
+        requestId,
+        model,
+        billing: resultJson?.billing ?? resultJson?.usage ?? null,
+        keys: Object.keys(resultJson || {}),
+      });
       const videoUri = resultJson?.video?.url ?? resultJson?.video_url ?? resultJson?.url;
       if (!videoUri) {
         console.error("fal.ai no video", JSON.stringify(resultJson).slice(0, 500));

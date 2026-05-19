@@ -49,11 +49,11 @@ type ChatMessage =
 
 const ITEM_KEY = "video-create:item";
 const USER_IMAGES_KEY = "video-create:userImages";
-const VIDEO_MODELS = [
-  "veo-3.1-fast-generate-preview",
-  "veo-3.1-lite-generate-preview",
-  "veo-3.0-fast-generate-001",
-] as const;
+// Single cheapest image-to-video model. No fallback loop — each retry is a paid call.
+const VIDEO_DURATION_SECONDS = 5;
+const VIDEO_RESOLUTION = "480p";
+const VIDEO_COST_PER_SECOND_USD = 0.05;
+const ESTIMATED_COST_USD = VIDEO_DURATION_SECONDS * VIDEO_COST_PER_SECOND_USD;
 const UPLOAD_IMAGE_MAX_EDGE = 1536;
 const UPLOAD_IMAGE_QUALITY = 0.82;
 
@@ -153,6 +153,11 @@ function VideoCreatePage() {
 
   const runFullGeneration = async (imgs: string[]) => {
     if (!item || imgs.length === 0) return;
+    if (didStart.current) {
+      // Hard guard against duplicate submissions / double-clicks / re-entry.
+      return;
+    }
+    didStart.current = true;
     setBusy(true);
     let statusId = uid();
     setMessages((m) => [
@@ -204,81 +209,52 @@ function VideoCreatePage() {
           id: statusId,
           role: "assistant",
           kind: "status",
-          text: "Generating your video — this takes 30–90 seconds…",
+          text: `Generating your ${VIDEO_DURATION_SECONDS}s video (${VIDEO_RESOLUTION}) — est. $${ESTIMATED_COST_USD.toFixed(2)}. This takes 30–90 seconds…`,
         },
       ]);
 
-      // STEP 2 — start video generation with model fallback
+      // STEP 2 — start ONE video generation. No automatic retries (each costs money).
       const maxMs = 5 * 60 * 1000;
       let videoUrl: string | null = null;
-      let lastVideoError = "Video generation failed";
 
-      for (let modelIndex = 0; modelIndex < VIDEO_MODELS.length && !videoUrl; modelIndex += 1) {
-        const model = VIDEO_MODELS[modelIndex];
-
-        setMessages((m) =>
-          m.map((message) =>
-            message.id === statusId
-              ? {
-                  ...message,
-                  text:
-                    modelIndex === 0
-                      ? "Generating your video — this takes 30–90 seconds…"
-                      : "Retrying video generation with another model…",
-                }
-              : message,
-          ),
-        );
-
-        const { data: startData, error: startErr } = await supabase.functions.invoke(
-          "generate-video",
-          {
-            body: { action: "start", imageDataUrl, prompt: item.prompt, model },
+      const { data: startData, error: startErr } = await supabase.functions.invoke(
+        "generate-video",
+        {
+          body: {
+            action: "start",
+            imageDataUrl,
+            prompt: item.prompt,
+            duration: VIDEO_DURATION_SECONDS,
+            resolution: VIDEO_RESOLUTION,
           },
+        },
+      );
+      if (startErr) throw new Error(startErr.message || "Video start failed");
+      if (startData?.error) throw new Error(startData.error);
+      const operationName: string | undefined = startData?.operationName;
+      if (!operationName) throw new Error("No operation name returned");
+      const statusUrl: string | undefined = startData?.statusUrl;
+      const responseUrl: string | undefined = startData?.responseUrl;
+
+      const startTs = Date.now();
+      while (Date.now() - startTs < maxMs) {
+        await new Promise((r) => setTimeout(r, 6000));
+        const { data: pollData, error: pollErr } = await supabase.functions.invoke(
+          "generate-video",
+          { body: { action: "poll", operationName, statusUrl, responseUrl } },
         );
-        if (startErr) throw new Error(startErr.message || "Video start failed");
-        if (startData?.error) throw new Error(startData.error);
-        const operationName: string | undefined = startData?.operationName;
-        if (!operationName) throw new Error("No operation name returned");
-        const statusUrl: string | undefined = startData?.statusUrl;
-        const responseUrl: string | undefined = startData?.responseUrl;
-
-        const startTs = Date.now();
-        let shouldTryNextModel = false;
-
-        while (Date.now() - startTs < maxMs) {
-          await new Promise((r) => setTimeout(r, 6000));
-          const { data: pollData, error: pollErr } = await supabase.functions.invoke(
-            "generate-video",
-            { body: { action: "poll", operationName, statusUrl, responseUrl } },
-          );
-          if (pollErr) throw new Error(pollErr.message || "Polling failed");
-
-          if (pollData?.done) {
-            if (pollData.videoUrl) {
-              videoUrl = pollData.videoUrl;
-              break;
-            }
-
-            lastVideoError = pollData?.error || "Video generation finished but no URL returned";
-            if (pollData?.filtered && pollData?.retryable && modelIndex < VIDEO_MODELS.length - 1) {
-              shouldTryNextModel = true;
-              break;
-            }
-
-            throw new Error(lastVideoError);
+        if (pollErr) throw new Error(pollErr.message || "Polling failed");
+        if (pollData?.done) {
+          if (pollData.videoUrl) {
+            videoUrl = pollData.videoUrl;
+            break;
           }
-        }
-
-        if (videoUrl) break;
-        if (shouldTryNextModel) continue;
-        if (Date.now() - startTs >= maxMs) {
-          lastVideoError = "Video generation timed out";
-          throw new Error(lastVideoError);
+          // Failure: surface error, DO NOT auto-retry with another model.
+          throw new Error(pollData?.error || "Video generation finished but no URL returned");
         }
       }
 
-      if (!videoUrl) throw new Error(lastVideoError);
+      if (!videoUrl) throw new Error("Video generation timed out");
 
       setMessages((m) =>
         m
@@ -304,14 +280,20 @@ function VideoCreatePage() {
     const files = Array.from(e.target.files ?? []).slice(0, 4);
     e.target.value = "";
     if (files.length === 0) return;
+    if (busy || didStart.current) return; // guard against double-pick
     const urls = await Promise.all(files.map(optimizeImageForUpload));
     setUserImages(urls);
     sessionStorage.setItem(USER_IMAGES_KEY, JSON.stringify(urls));
     setMessages((m) => [
       ...m,
       { id: uid(), role: "user", kind: "images", images: urls },
+      {
+        id: uid(),
+        role: "assistant",
+        kind: "status",
+        text: `Estimated cost: $${ESTIMATED_COST_USD.toFixed(2)} (${VIDEO_DURATION_SECONDS}s @ ${VIDEO_RESOLUTION}).`,
+      },
     ]);
-    if (!didStart.current) didStart.current = true;
     await runFullGeneration(urls);
   };
 
