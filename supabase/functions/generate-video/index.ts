@@ -11,6 +11,44 @@ const corsHeaders = {
 
 const FAL_VIDEO_MODEL = "fal-ai/wan/v2.5/image-to-video";
 
+function getFalAppNamespace(model: string) {
+  return model.split("/").slice(0, 2).join("/");
+}
+
+function buildFalQueueUrl(
+  kind: "status" | "result",
+  requestId: string,
+  model: string,
+  providedUrl?: string,
+) {
+  const appNs = getFalAppNamespace(model);
+  const fallbackPath = kind === "status"
+    ? `/${appNs}/requests/${requestId}/status`
+    : `/${appNs}/requests/${requestId}`;
+
+  if (!providedUrl) return `https://queue.fal.run${fallbackPath}`;
+
+  try {
+    const url = new URL(providedUrl);
+    const parts = url.pathname.split("/").filter(Boolean);
+    const requestsIndex = parts.indexOf("requests");
+
+    if (requestsIndex >= 2) {
+      const normalizedParts = [
+        ...parts.slice(0, 2),
+        "requests",
+        requestId,
+        ...(kind === "status" ? ["status"] : []),
+      ];
+      return `${url.origin}/${normalizedParts.join("/")}`;
+    }
+  } catch {
+    // Fall through to the safe fallback below.
+  }
+
+  return `https://queue.fal.run${fallbackPath}`;
+}
+
 function jsonResponse(body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -56,21 +94,22 @@ export async function handleGenerateVideoRequest(req: Request) {
       }
 
       const startJson = await startRes.json();
-      const requestId = startJson?.request_id;
+      const model = startJson?.model ?? FAL_VIDEO_MODEL;
+      const requestId = startJson?.request_id ?? startJson?.requestId ?? startJson?.id;
       if (!requestId) {
         return jsonResponse({ error: "No request_id returned from fal.ai" }, 502);
       }
 
       return jsonResponse({
-        operationName: `${FAL_VIDEO_MODEL}:${requestId}`,
-        model: FAL_VIDEO_MODEL,
+        operationName: `${model}:${requestId}`,
+        model,
         statusUrl: startJson?.status_url,
         responseUrl: startJson?.response_url,
       });
     }
 
     if (action === "poll") {
-      const { operationName } = body;
+      const { operationName, statusUrl, responseUrl } = body;
       if (!operationName) throw new Error("operationName required");
 
       const sep = operationName.lastIndexOf(":");
@@ -78,12 +117,8 @@ export async function handleGenerateVideoRequest(req: Request) {
       const model = operationName.slice(0, sep);
       const requestId = operationName.slice(sep + 1);
 
-      // fal queue status/result paths use only the app namespace (e.g. fal-ai/wan),
-      // not the full model path. Always derive — fal's returned status_url/response_url
-      // can contain the full model path and 404.
-      const appNs = model.split("/").slice(0, 2).join("/");
-      const statusEndpoint = `https://queue.fal.run/${appNs}/requests/${requestId}/status`;
-      const resultEndpoint = `https://queue.fal.run/${appNs}/requests/${requestId}`;
+      const statusEndpoint = buildFalQueueUrl("status", requestId, model, statusUrl);
+      const resultEndpoint = buildFalQueueUrl("result", requestId, model, responseUrl);
 
       const statusRes = await fetch(statusEndpoint, {
         headers: { Authorization: `Key ${falKey}` },
