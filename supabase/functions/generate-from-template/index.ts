@@ -95,17 +95,32 @@ export async function handleGenerateFromTemplateRequest(req: Request) {
         parts.push({ inlineData: { mimeType: m[1], data: m[2] } });
       }
 
-      const geminiRes = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${googleKey}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [{ parts }],
-            generationConfig: { responseModalities: ["IMAGE", "TEXT"] },
-          }),
-        },
-      );
+      const geminiCtrl = new AbortController();
+      const geminiTimer = setTimeout(() => geminiCtrl.abort(), 110_000);
+      let geminiRes: Response;
+      try {
+        geminiRes = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${googleKey}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [{ parts }],
+              generationConfig: { responseModalities: ["IMAGE", "TEXT"] },
+            }),
+            signal: geminiCtrl.signal,
+          },
+        );
+      } catch (err) {
+        clearTimeout(geminiTimer);
+        console.error("Gemini fetch failed/timeout", err);
+        return jsonResponse({
+          error: "Image edit timed out. Please try again with smaller photos.",
+          errorCode: "TIMEOUT",
+          fallback: true,
+        }, 504);
+      }
+      clearTimeout(geminiTimer);
 
       if (geminiRes.ok) {
         const json = await geminiRes.json();
