@@ -70,7 +70,7 @@ export async function handleGenerateVideoRequest(req: Request) {
     }
 
     if (action === "poll") {
-      const { operationName, statusUrl, responseUrl } = body;
+      const { operationName } = body;
       if (!operationName) throw new Error("operationName required");
 
       const sep = operationName.lastIndexOf(":");
@@ -78,14 +78,12 @@ export async function handleGenerateVideoRequest(req: Request) {
       const model = operationName.slice(0, sep);
       const requestId = operationName.slice(sep + 1);
 
-      // fal queue status path uses the app namespace (e.g. fal-ai/wan), not the full
-      // model path. Prefer the statusUrl returned at submission; otherwise derive it
-      // from the first two segments of the model id.
+      // fal queue status/result paths use only the app namespace (e.g. fal-ai/wan),
+      // not the full model path. Always derive — fal's returned status_url/response_url
+      // can contain the full model path and 404.
       const appNs = model.split("/").slice(0, 2).join("/");
-      const statusEndpoint =
-        statusUrl || `https://queue.fal.run/${appNs}/requests/${requestId}/status`;
-      const resultEndpoint =
-        responseUrl || `https://queue.fal.run/${appNs}/requests/${requestId}`;
+      const statusEndpoint = `https://queue.fal.run/${appNs}/requests/${requestId}/status`;
+      const resultEndpoint = `https://queue.fal.run/${appNs}/requests/${requestId}`;
 
       const statusRes = await fetch(statusEndpoint, {
         headers: { Authorization: `Key ${falKey}` },
