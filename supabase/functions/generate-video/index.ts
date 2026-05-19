@@ -9,9 +9,10 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const FAL_VIDEO_MODEL = "fal-ai/wan/v2.5/image-to-video";
+const FAL_VIDEO_MODEL = "fal-ai/wan-25-preview/image-to-video";
 
 function getFalAppNamespace(model: string) {
+  if (model.startsWith("fal-ai/wan-25-preview")) return "fal-ai/wan-25-preview";
   return model.split("/").slice(0, 2).join("/");
 }
 
@@ -33,9 +34,9 @@ function buildFalQueueUrl(
     const parts = url.pathname.split("/").filter(Boolean);
     const requestsIndex = parts.indexOf("requests");
 
-    if (requestsIndex >= 2) {
+    if (requestsIndex >= 1) {
       const normalizedParts = [
-        ...parts.slice(0, 2),
+        ...parts.slice(0, requestsIndex),
         "requests",
         requestId,
         ...(kind === "status" ? ["status"] : []),
