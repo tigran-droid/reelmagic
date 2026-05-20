@@ -319,7 +319,21 @@ type PhotoshopItem = {
   audio_end_sec: number | null;
   position: number;
   created_at: string;
+  prompt: string | null;
 };
+
+/** Default 10-line generic instruction. Used when an item has no custom prompt. */
+export const DEFAULT_PHOTOSHOP_PROMPT = [
+  "You will receive multiple images.",
+  "Image 1 is the TEMPLATE scene — keep its composition, framing, pose, lighting, color grading, wardrobe, background and overall style exactly as shown.",
+  "The remaining images are REFERENCE photos of the USER — use them ONLY as the identity source (face, hair, skin tone, distinctive features, approximate body shape).",
+  "Recreate the TEMPLATE scene so that the main subject IS the USER from the reference photos.",
+  "Do NOT keep the template person's face — fully replace it with the user's identity from the reference images.",
+  "Do NOT copy the user's clothing, background, pose or lighting from the reference photos — those come ONLY from the template.",
+  "Preserve the user's exact facial identity and likeness; do not invent a new or generic person.",
+  "Keep the result photorealistic, sharp and consistent with the template's camera and lens.",
+  "Return exactly ONE final edited image.",
+].join("\n");
 
 function PhotoshopAdmin() {
   const qc = useQueryClient();
