@@ -8,7 +8,8 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const FAL_MODEL = "fal-ai/bytedance/seedream/v4/edit";
+const LOVABLE_AI_MODEL = "google/gemini-2.5-flash-image";
+const LOVABLE_AI_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 const MAX_IMAGE_BYTES = 2_500_000;
 
 function jsonResponse(body: Record<string, unknown>, status = 200) {
@@ -60,8 +61,8 @@ export async function handleGenerateFromTemplateRequest(req: Request) {
   }
 
   try {
-    const falKey = Deno.env.get("FAL_AI_API_KEY");
-    if (!falKey) throw new Error("FAL_AI_API_KEY not configured");
+    const lovableKey = Deno.env.get("LOVABLE_API_KEY");
+    if (!lovableKey) throw new Error("LOVABLE_API_KEY not configured");
 
     const { templateUrl, userImages, prompt } = await req.json();
     if (!templateUrl) throw new Error("templateUrl required");
@@ -90,37 +91,58 @@ export async function handleGenerateFromTemplateRequest(req: Request) {
         "Return one photorealistic edited image.",
       ].join("\n");
 
-    const image_urls = [templateDataUrl, ...normalizedUserImages];
+    const allImages = [templateDataUrl, ...normalizedUserImages];
+    const userContent: Array<Record<string, unknown>> = allImages.map((url) => ({
+      type: "image_url",
+      image_url: { url },
+    }));
+    userContent.push({ type: "text", text: instruction });
 
-    const falRes = await fetch(`https://fal.run/${FAL_MODEL}`, {
+    console.log("[generate-from-template] calling", LOVABLE_AI_MODEL, "images:", allImages.length);
+
+    const aiRes = await fetch(LOVABLE_AI_URL, {
       method: "POST",
       headers: {
-        Authorization: `Key ${falKey}`,
+        Authorization: `Bearer ${lovableKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        prompt: instruction,
-        image_urls,
-        num_images: 1,
-        max_images: 1,
-        enable_safety_checker: false,
+        model: LOVABLE_AI_MODEL,
+        messages: [{ role: "user", content: userContent }],
+        modalities: ["image", "text"],
       }),
     });
 
-    if (!falRes.ok) {
-      const text = await falRes.text();
-      console.error("fal.ai seedream error", falRes.status, text);
+    if (!aiRes.ok) {
+      const text = await aiRes.text();
+      console.error("Lovable AI image error", aiRes.status, text);
+      const errorCode =
+        aiRes.status === 429
+          ? "RATE_LIMITED"
+          : aiRes.status === 402
+            ? "PAYMENT_REQUIRED"
+            : "AI_IMAGE_EDIT_FAILED";
       return jsonResponse({
-        error: `Image edit failed [${falRes.status}]: ${text.slice(0, 300)}`,
-        errorCode: falRes.status === 429 ? "RATE_LIMITED" : "AI_IMAGE_EDIT_FAILED",
+        error: `Image edit failed [${aiRes.status}]: ${text.slice(0, 300)}`,
+        errorCode,
         fallback: true,
-      }, falRes.status === 429 ? 200 : 200);
+      });
     }
 
-    const json = await falRes.json();
-    const imageUrl = json?.images?.[0]?.url ?? json?.image?.url;
-    if (!imageUrl) {
-      console.error("fal.ai returned no image", JSON.stringify(json).slice(0, 500));
+    const json = await aiRes.json();
+    const message = json?.choices?.[0]?.message;
+    const imageFromImages = message?.images?.[0]?.image_url?.url;
+    let imageDataUrl: string | undefined = imageFromImages;
+    if (!imageDataUrl && Array.isArray(message?.content)) {
+      for (const part of message.content) {
+        if (part?.type === "image_url" && part?.image_url?.url) {
+          imageDataUrl = part.image_url.url;
+          break;
+        }
+      }
+    }
+    if (!imageDataUrl) {
+      console.error("Lovable AI returned no image", JSON.stringify(json).slice(0, 500));
       return jsonResponse({
         error: "The image editor did not return an image.",
         errorCode: "AI_IMAGE_EDIT_NO_OUTPUT",
@@ -128,14 +150,11 @@ export async function handleGenerateFromTemplateRequest(req: Request) {
       });
     }
 
-    // Return either remote URL or fetch and inline if you want data URL.
-    // Client expects imageDataUrl — fetch and inline.
-    let imageDataUrl = imageUrl;
-    if (imageUrl.startsWith("http")) {
+    if (imageDataUrl.startsWith("http")) {
       try {
-        imageDataUrl = await urlToDataUrl(imageUrl);
+        imageDataUrl = await urlToDataUrl(imageDataUrl);
       } catch (e) {
-        console.error("Failed to inline fal image", e);
+        console.error("Failed to inline AI image", e);
       }
     }
 
