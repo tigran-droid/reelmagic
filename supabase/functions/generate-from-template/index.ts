@@ -8,8 +8,8 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const LOVABLE_AI_MODEL = "google/gemini-2.5-flash-image";
-const LOVABLE_AI_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
+const GEMINI_MODEL = "gemini-3.1-flash-image-preview";
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 const MAX_IMAGE_BYTES = 2_500_000;
 
 function jsonResponse(body: Record<string, unknown>, status = 200) {
@@ -61,8 +61,8 @@ export async function handleGenerateFromTemplateRequest(req: Request) {
   }
 
   try {
-    const lovableKey = Deno.env.get("LOVABLE_API_KEY");
-    if (!lovableKey) throw new Error("LOVABLE_API_KEY not configured");
+    const geminiKey = Deno.env.get("GOOGLE_GEMINI_API_KEY");
+    if (!geminiKey) throw new Error("GOOGLE_GEMINI_API_KEY not configured");
 
     const { templateUrl, userImages, prompt } = await req.json();
     if (!templateUrl) throw new Error("templateUrl required");
@@ -92,30 +92,28 @@ export async function handleGenerateFromTemplateRequest(req: Request) {
       ].join("\n");
 
     const allImages = [templateDataUrl, ...normalizedUserImages];
-    const userContent: Array<Record<string, unknown>> = allImages.map((url) => ({
-      type: "image_url",
-      image_url: { url },
-    }));
-    userContent.push({ type: "text", text: instruction });
+    const parts: Array<Record<string, unknown>> = allImages.map((url) => {
+      const m = url.match(/^data:([^;]+);base64,(.+)$/);
+      const mime = m?.[1] ?? "image/png";
+      const data = m?.[2] ?? "";
+      return { inline_data: { mime_type: mime, data } };
+    });
+    parts.push({ text: instruction });
 
-    console.log("[generate-from-template] calling", LOVABLE_AI_MODEL, "images:", allImages.length);
+    console.log("[generate-from-template] calling", GEMINI_MODEL, "images:", allImages.length);
 
-    const aiRes = await fetch(LOVABLE_AI_URL, {
+    const aiRes = await fetch(`${GEMINI_URL}?key=${geminiKey}`, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${lovableKey}`,
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: LOVABLE_AI_MODEL,
-        messages: [{ role: "user", content: userContent }],
-        modalities: ["image", "text"],
+        contents: [{ role: "user", parts }],
+        generationConfig: { responseModalities: ["IMAGE", "TEXT"] },
       }),
     });
 
     if (!aiRes.ok) {
       const text = await aiRes.text();
-      console.error("Lovable AI image error", aiRes.status, text);
+      console.error("Gemini image error", aiRes.status, text);
       const errorCode =
         aiRes.status === 429
           ? "RATE_LIMITED"
@@ -130,19 +128,18 @@ export async function handleGenerateFromTemplateRequest(req: Request) {
     }
 
     const json = await aiRes.json();
-    const message = json?.choices?.[0]?.message;
-    const imageFromImages = message?.images?.[0]?.image_url?.url;
-    let imageDataUrl: string | undefined = imageFromImages;
-    if (!imageDataUrl && Array.isArray(message?.content)) {
-      for (const part of message.content) {
-        if (part?.type === "image_url" && part?.image_url?.url) {
-          imageDataUrl = part.image_url.url;
-          break;
-        }
+    let imageDataUrl: string | undefined;
+    const respParts = json?.candidates?.[0]?.content?.parts ?? [];
+    for (const p of respParts) {
+      const inline = p?.inline_data ?? p?.inlineData;
+      if (inline?.data) {
+        const mime = inline.mime_type ?? inline.mimeType ?? "image/png";
+        imageDataUrl = `data:${mime};base64,${inline.data}`;
+        break;
       }
     }
     if (!imageDataUrl) {
-      console.error("Lovable AI returned no image", JSON.stringify(json).slice(0, 500));
+      console.error("Gemini returned no image", JSON.stringify(json).slice(0, 500));
       return jsonResponse({
         error: "The image editor did not return an image.",
         errorCode: "AI_IMAGE_EDIT_NO_OUTPUT",
