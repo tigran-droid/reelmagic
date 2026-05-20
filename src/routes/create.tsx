@@ -32,6 +32,7 @@ type DraftReel = {
   cover: string;
   title: string;
   hashtags: string[];
+  prompt?: string | null;
 };
 
 type ChatMessage =
@@ -123,7 +124,11 @@ function CreatePage() {
           body: {
             templateUrl,
             userImages: imgs,
-            ...(promptText ? { prompt: promptText } : {}),
+            ...(promptText
+              ? { prompt: promptText }
+              : reel.prompt
+                ? { prompt: reel.prompt }
+                : {}),
           },
         },
       );

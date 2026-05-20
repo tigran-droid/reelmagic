@@ -25,6 +25,7 @@ export type Database = {
           image_url: string
           image_urls: string[]
           position: number
+          prompt: string | null
           section_id: string
           song: string | null
           title: string
@@ -39,6 +40,7 @@ export type Database = {
           image_url: string
           image_urls?: string[]
           position?: number
+          prompt?: string | null
           section_id: string
           song?: string | null
           title: string
@@ -53,6 +55,7 @@ export type Database = {
           image_url?: string
           image_urls?: string[]
           position?: number
+          prompt?: string | null
           section_id?: string
           song?: string | null
           title?: string
@@ -98,6 +101,7 @@ export type Database = {
           id: string
           image_url: string
           image_urls: string[]
+          prompt: string | null
           song: string | null
           title: string
         }
@@ -110,6 +114,7 @@ export type Database = {
           id?: string
           image_url: string
           image_urls?: string[]
+          prompt?: string | null
           song?: string | null
           title: string
         }
@@ -122,6 +127,7 @@ export type Database = {
           id?: string
           image_url?: string
           image_urls?: string[]
+          prompt?: string | null
           song?: string | null
           title?: string
         }

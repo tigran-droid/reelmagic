@@ -91,19 +91,34 @@ export async function handleGenerateFromTemplateRequest(req: Request) {
     ]);
     console.log("[generate-from-template] image prep ms:", Date.now() - t0);
 
-    // Shorter prompt = fewer input tokens = faster response.
-    const instruction =
-      prompt ??
-      "Edit image 1 only. Replace the main person's face/identity with the user from the reference image(s). Keep template's composition, pose, lighting, clothing, and background unchanged. Preserve the user's exact facial identity. Return one photorealistic image.";
+    // Default prompt — general, NOT just a face swap. Each template can
+    // override this from the admin panel (e.g. "swap face only" vs
+    // "replace the entire body"). Kept ~10 lines for clarity.
+    const DEFAULT_INSTRUCTION = [
+      "You will receive multiple images.",
+      "Image 1 is the TEMPLATE scene — keep its composition, framing, pose, lighting, color grading, wardrobe, background and overall style exactly as shown.",
+      "The remaining images are REFERENCE photos of the USER — use them ONLY as the identity source (face, hair, skin tone, distinctive features, approximate body shape).",
+      "Recreate the TEMPLATE scene so that the main subject IS the USER from the reference photos.",
+      "Do NOT keep the template person's face — fully replace it with the user's identity from the reference images.",
+      "Do NOT copy the user's clothing, background, pose or lighting from the reference photos — those come ONLY from the template.",
+      "Preserve the user's exact facial identity and likeness; do not invent a new or generic person.",
+      "Keep the result photorealistic, sharp and consistent with the template's camera and lens.",
+      "Return exactly ONE final edited image.",
+    ].join("\n");
+    const instruction = (typeof prompt === "string" && prompt.trim().length > 0)
+      ? prompt
+      : DEFAULT_INSTRUCTION;
 
+    // Put the instruction FIRST so the model reads the role of each image
+    // before seeing them, then the template, then the user refs.
+    const parts: Array<Record<string, unknown>> = [{ text: instruction }];
     const allImages = [templateDataUrl, ...normalizedUserImages];
-    const parts: Array<Record<string, unknown>> = allImages.map((url) => {
+    for (const url of allImages) {
       const m = url.match(/^data:([^;]+);base64,(.+)$/);
       const mime = m?.[1] ?? "image/png";
       const data = m?.[2] ?? "";
-      return { inline_data: { mime_type: mime, data } };
-    });
-    parts.push({ text: instruction });
+      parts.push({ inline_data: { mime_type: mime, data } });
+    }
 
     console.log("[generate-from-template] calling", GEMINI_MODEL, "images:", allImages.length);
 

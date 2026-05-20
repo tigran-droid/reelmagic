@@ -50,6 +50,92 @@ function Admin() {
   );
 }
 
+function PhotoRow({
+  it, canMoveUp, canMoveDown, onMoveUp, onMoveDown, onDelete, onChange,
+}: {
+  it: PhotoshopItem;
+  canMoveUp: boolean; canMoveDown: boolean;
+  onMoveUp: () => void; onMoveDown: () => void; onDelete: () => void;
+  onChange: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(it.prompt ?? DEFAULT_PHOTOSHOP_PROMPT);
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    setSaving(true);
+    const { error } = await supabase
+      .from("photoshop_items")
+      .update({ prompt: draft.trim() || null })
+      .eq("id", it.id);
+    setSaving(false);
+    if (error) { alert(error.message); return; }
+    setEditing(false);
+    onChange();
+  };
+
+  const isCustom = !!(it.prompt && it.prompt.trim());
+
+  return (
+    <div className="rounded-lg bg-background border border-border">
+      <div className="flex items-center gap-2 p-1.5">
+        <img src={it.image_url} alt={it.title} className="size-10 rounded object-cover" />
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-semibold truncate">{it.title}</p>
+          <p className="text-[10px] text-muted-foreground truncate">{it.hashtags.join(" ")} {it.song && `· ${it.song}`}</p>
+        </div>
+        <button
+          onClick={() => { setDraft(it.prompt ?? DEFAULT_PHOTOSHOP_PROMPT); setEditing((v) => !v); }}
+          className={`p-1.5 ${isCustom ? "text-brand" : "text-muted-foreground hover:text-foreground"}`}
+          aria-label="Edit prompt"
+          title={isCustom ? "Custom prompt" : "Default prompt"}
+        >
+          <FileText className="size-3.5" />
+        </button>
+        <button onClick={onMoveUp} disabled={!canMoveUp}
+          className="p-1.5 text-muted-foreground hover:text-foreground disabled:opacity-30" aria-label="Move up">
+          <ArrowUp className="size-3.5" />
+        </button>
+        <button onClick={onMoveDown} disabled={!canMoveDown}
+          className="p-1.5 text-muted-foreground hover:text-foreground disabled:opacity-30" aria-label="Move down">
+          <ArrowDown className="size-3.5" />
+        </button>
+        <button onClick={onDelete} className="p-1.5 text-muted-foreground hover:text-destructive" aria-label="Delete photo">
+          <Trash2 className="size-3.5" />
+        </button>
+      </div>
+      {editing && (
+        <div className="border-t border-border p-2 space-y-2">
+          <p className="text-[10px] text-muted-foreground">
+            AI prompt used when a user recreates this template. Leave as default for face replacement; customize per item (e.g. swap whole body, swap outfit only).
+          </p>
+          <textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            rows={8}
+            className="w-full bg-background border border-border rounded-lg px-2 py-1.5 text-[11px] font-mono leading-relaxed"
+          />
+          <div className="flex gap-2">
+            <button onClick={save} disabled={saving}
+              className="flex-1 inline-flex items-center justify-center gap-1 bg-brand text-white text-xs font-semibold rounded-md py-1.5 disabled:opacity-60">
+              {saving ? <Loader2 className="size-3 animate-spin" /> : <Check className="size-3" />}
+              {saving ? "Saving…" : "Save prompt"}
+            </button>
+            <button onClick={() => setDraft(DEFAULT_PHOTOSHOP_PROMPT)} disabled={saving}
+              className="px-2 text-xs font-semibold rounded-md bg-muted text-foreground">
+              Reset
+            </button>
+            <button onClick={() => setEditing(false)} disabled={saving}
+              className="px-2 text-xs font-semibold rounded-md bg-muted text-foreground">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* =========================================================================
    REELS ADMIN (original functionality)
    ========================================================================= */
@@ -319,7 +405,21 @@ type PhotoshopItem = {
   audio_end_sec: number | null;
   position: number;
   created_at: string;
+  prompt: string | null;
 };
+
+/** Default 10-line generic instruction. Used when an item has no custom prompt. */
+export const DEFAULT_PHOTOSHOP_PROMPT = [
+  "You will receive multiple images.",
+  "Image 1 is the TEMPLATE scene — keep its composition, framing, pose, lighting, color grading, wardrobe, background and overall style exactly as shown.",
+  "The remaining images are REFERENCE photos of the USER — use them ONLY as the identity source (face, hair, skin tone, distinctive features, approximate body shape).",
+  "Recreate the TEMPLATE scene so that the main subject IS the USER from the reference photos.",
+  "Do NOT keep the template person's face — fully replace it with the user's identity from the reference images.",
+  "Do NOT copy the user's clothing, background, pose or lighting from the reference photos — those come ONLY from the template.",
+  "Preserve the user's exact facial identity and likeness; do not invent a new or generic person.",
+  "Keep the result photorealistic, sharp and consistent with the template's camera and lens.",
+  "Return exactly ONE final edited image.",
+].join("\n");
 
 function PhotoshopAdmin() {
   const qc = useQueryClient();
@@ -459,32 +559,16 @@ function SectionCard({ section, items, onChange }: {
 
       <div className="space-y-1.5">
         {sorted.map((it, idx) => (
-          <div key={it.id} className="flex items-center gap-2 p-1.5 rounded-lg bg-background border border-border">
-            <img src={it.image_url} alt={it.title} className="size-10 rounded object-cover" />
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold truncate">{it.title}</p>
-              <p className="text-[10px] text-muted-foreground truncate">{it.hashtags.join(" ")} {it.song && `· ${it.song}`}</p>
-            </div>
-            <button
-              onClick={() => moveItem(idx, -1)}
-              disabled={idx === 0}
-              className="p-1.5 text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:hover:text-muted-foreground"
-              aria-label="Move up"
-            >
-              <ArrowUp className="size-3.5" />
-            </button>
-            <button
-              onClick={() => moveItem(idx, 1)}
-              disabled={idx === sorted.length - 1}
-              className="p-1.5 text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:hover:text-muted-foreground"
-              aria-label="Move down"
-            >
-              <ArrowDown className="size-3.5" />
-            </button>
-            <button onClick={() => deleteItem(it.id)} className="p-1.5 text-muted-foreground hover:text-destructive" aria-label="Delete photo">
-              <Trash2 className="size-3.5" />
-            </button>
-          </div>
+          <PhotoRow
+            key={it.id}
+            it={it}
+            canMoveUp={idx !== 0}
+            canMoveDown={idx !== sorted.length - 1}
+            onMoveUp={() => moveItem(idx, -1)}
+            onMoveDown={() => moveItem(idx, 1)}
+            onDelete={() => deleteItem(it.id)}
+            onChange={onChange}
+          />
         ))}
         {items.length === 0 && <p className="text-xs text-muted-foreground px-1">No photos in this section yet.</p>}
       </div>
@@ -516,6 +600,7 @@ function AddItemForm({ section, existingCount, onDone, onCancel }: {
   const [audio, setAudio] = useState<File | null>(null);
   const [audioStart, setAudioStart] = useState(0);
   const [audioEnd, setAudioEnd] = useState<number | null>(null);
+  const [prompt, setPrompt] = useState(DEFAULT_PHOTOSHOP_PROMPT);
   const [busy, setBusy] = useState(false);
 
   const submit = async () => {
@@ -538,6 +623,7 @@ function AddItemForm({ section, existingCount, onDone, onCancel }: {
         audio_start_sec: audio ? audioStart : 0,
         audio_end_sec: audio ? audioEnd : null,
         position: existingCount,
+        prompt: prompt.trim() || null,
       });
       if (error) throw error;
       onDone();
@@ -566,6 +652,21 @@ function AddItemForm({ section, existingCount, onDone, onCancel }: {
         <AudioTrimmer file={audio} start={audioStart} end={audioEnd}
           onChange={(s, e) => { setAudioStart(s); setAudioEnd(e); }} />
       )}
+      <Field label="AI prompt (used when a user recreates this template)">
+        <textarea
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+          rows={8}
+          className="w-full bg-background border border-border rounded-lg px-3 py-2 text-xs font-mono leading-relaxed"
+        />
+        <button
+          type="button"
+          onClick={() => setPrompt(DEFAULT_PHOTOSHOP_PROMPT)}
+          className="mt-1 text-[10px] text-muted-foreground hover:text-foreground underline"
+        >
+          Reset to default
+        </button>
+      </Field>
       <div className="flex gap-2 pt-1">
         <button onClick={submit} disabled={busy}
           className="flex-1 inline-flex items-center justify-center gap-1.5 bg-brand text-white text-sm font-semibold rounded-lg py-2 disabled:opacity-60">
