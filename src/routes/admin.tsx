@@ -473,32 +473,16 @@ function SectionCard({ section, items, onChange }: {
 
       <div className="space-y-1.5">
         {sorted.map((it, idx) => (
-          <div key={it.id} className="flex items-center gap-2 p-1.5 rounded-lg bg-background border border-border">
-            <img src={it.image_url} alt={it.title} className="size-10 rounded object-cover" />
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold truncate">{it.title}</p>
-              <p className="text-[10px] text-muted-foreground truncate">{it.hashtags.join(" ")} {it.song && `· ${it.song}`}</p>
-            </div>
-            <button
-              onClick={() => moveItem(idx, -1)}
-              disabled={idx === 0}
-              className="p-1.5 text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:hover:text-muted-foreground"
-              aria-label="Move up"
-            >
-              <ArrowUp className="size-3.5" />
-            </button>
-            <button
-              onClick={() => moveItem(idx, 1)}
-              disabled={idx === sorted.length - 1}
-              className="p-1.5 text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:hover:text-muted-foreground"
-              aria-label="Move down"
-            >
-              <ArrowDown className="size-3.5" />
-            </button>
-            <button onClick={() => deleteItem(it.id)} className="p-1.5 text-muted-foreground hover:text-destructive" aria-label="Delete photo">
-              <Trash2 className="size-3.5" />
-            </button>
-          </div>
+          <PhotoRow
+            key={it.id}
+            it={it}
+            canMoveUp={idx !== 0}
+            canMoveDown={idx !== sorted.length - 1}
+            onMoveUp={() => moveItem(idx, -1)}
+            onMoveDown={() => moveItem(idx, 1)}
+            onDelete={() => deleteItem(it.id)}
+            onChange={onChange}
+          />
         ))}
         {items.length === 0 && <p className="text-xs text-muted-foreground px-1">No photos in this section yet.</p>}
       </div>
