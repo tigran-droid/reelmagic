@@ -15,6 +15,7 @@ type Item = {
   audio?: string | null;
   audioStart: number;
   audioEnd: number | null;
+  prompt?: string | null;
 };
 
 export const Route = createFileRoute("/photoshop_/feed")({
@@ -61,6 +62,7 @@ function PhotoshopFeed() {
           audio: r.audio_url,
           audioStart: Number(r.audio_start_sec ?? 0),
           audioEnd: r.audio_end_sec != null ? Number(r.audio_end_sec) : null,
+          prompt: (r as { prompt?: string | null }).prompt ?? null,
         };
       });
     },
@@ -131,6 +133,7 @@ function PhotoshopFeed() {
     try {
       sessionStorage.setItem("create:draft", JSON.stringify({
         images: it.images, cover: it.cover, title: it.title, hashtags: it.hashtags,
+        prompt: it.prompt ?? null,
       }));
     } catch { /* noop */ }
     pendingRef.current = it;
