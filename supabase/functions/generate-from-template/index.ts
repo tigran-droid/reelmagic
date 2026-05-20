@@ -10,8 +10,14 @@ const corsHeaders = {
 
 const GEMINI_MODEL = "gemini-3.1-flash-image-preview";
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
-const MAX_IMAGE_BYTES = 900_000;
-const MAX_IMAGE_DIM = 1024;
+// Keep template at higher quality (it defines the final scene),
+// downscale identity refs more aggressively — they only need to convey face.
+const MAX_IMAGE_BYTES = 600_000;
+const TEMPLATE_MAX_DIM = 1024;
+const USER_REF_MAX_DIM = 768;
+// Hard cap on identity refs sent to the model. More images = much slower
+// inference with negligible quality gain past 2 good shots.
+const MAX_USER_REFS = 2;
 
 function jsonResponse(body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -30,14 +36,14 @@ async function urlToDataUrl(url: string): Promise<string> {
   return `data:${mime};base64,${btoa(bin)}`;
 }
 
-async function normalizeDataUrl(dataUrl: string): Promise<string> {
+async function normalizeDataUrl(dataUrl: string, maxDim: number): Promise<string> {
   try {
     const res = await fetch(dataUrl);
     const blob = await res.blob();
     if (blob.size <= MAX_IMAGE_BYTES) return dataUrl;
 
     const bitmap = await createImageBitmap(blob);
-    const scale = Math.min(1, MAX_IMAGE_DIM / Math.max(bitmap.width, bitmap.height, 1));
+    const scale = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height, 1));
     const width = Math.max(1, Math.round(bitmap.width * scale));
     const height = Math.max(1, Math.round(bitmap.height * scale));
 
@@ -46,7 +52,7 @@ async function normalizeDataUrl(dataUrl: string): Promise<string> {
     if (!ctx) return dataUrl;
 
     ctx.drawImage(bitmap, 0, 0, width, height);
-    const out = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.78 });
+    const out = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.8 });
     const buf = new Uint8Array(await out.arrayBuffer());
     let bin = "";
     for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i]);
@@ -70,27 +76,25 @@ export async function handleGenerateFromTemplateRequest(req: Request) {
     if (!Array.isArray(userImages) || userImages.length === 0) {
       throw new Error("At least one user photo is required");
     }
-    if (userImages.length > 4) throw new Error("Maximum 4 user photos");
 
-    const templateDataUrl = await normalizeDataUrl(await urlToDataUrl(templateUrl));
-    const normalizedUserImages = await Promise.all(
-      userImages.map((img: string) => normalizeDataUrl(img)),
-    );
+    // Cap identity references — extra refs slow the model significantly
+    // without improving facial fidelity.
+    const trimmedUserImages = userImages.slice(0, MAX_USER_REFS);
 
+    const t0 = Date.now();
+    // Fetch + normalize template AND user refs fully in parallel.
+    const [templateDataUrl, ...normalizedUserImages] = await Promise.all([
+      urlToDataUrl(templateUrl).then((u) => normalizeDataUrl(u, TEMPLATE_MAX_DIM)),
+      ...trimmedUserImages.map((img: string) =>
+        normalizeDataUrl(img, USER_REF_MAX_DIM),
+      ),
+    ]);
+    console.log("[generate-from-template] image prep ms:", Date.now() - t0);
+
+    // Shorter prompt = fewer input tokens = faster response.
     const instruction =
       prompt ??
-      [
-        "Edit the FIRST image only.",
-        "The first image is the target template scene and body reference.",
-        "All remaining images are identity references of the same real user.",
-        "Replace the main person's face and identity in the first image with the uploaded user from the reference images.",
-        "Keep the original template composition, crop, pose, body position, lighting, background, clothing style, and overall scene intact.",
-        "Do not keep the original template person's face.",
-        "Do not create a new composition or a different person.",
-        "Preserve the uploaded user's exact facial identity, skin tone, hairline, hair color, age, and distinguishing features.",
-        "Blend the replacement naturally with matching perspective, shadows, skin texture, and white balance.",
-        "Return one photorealistic edited image.",
-      ].join("\n");
+      "Edit image 1 only. Replace the main person's face/identity with the user from the reference image(s). Keep template's composition, pose, lighting, clothing, and background unchanged. Preserve the user's exact facial identity. Return one photorealistic image.";
 
     const allImages = [templateDataUrl, ...normalizedUserImages];
     const parts: Array<Record<string, unknown>> = allImages.map((url) => {
@@ -105,6 +109,7 @@ export async function handleGenerateFromTemplateRequest(req: Request) {
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 140_000);
+    const tFetch = Date.now();
     let aiRes: Response;
     try {
       aiRes = await fetch(`${GEMINI_URL}?key=${geminiKey}`, {
@@ -129,6 +134,7 @@ export async function handleGenerateFromTemplateRequest(req: Request) {
       });
     }
     clearTimeout(timeoutId);
+    console.log("[generate-from-template] gemini ms:", Date.now() - tFetch);
 
     if (!aiRes.ok) {
       const text = await aiRes.text();
