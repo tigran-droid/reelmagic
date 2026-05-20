@@ -50,6 +50,92 @@ function Admin() {
   );
 }
 
+function PhotoRow({
+  it, canMoveUp, canMoveDown, onMoveUp, onMoveDown, onDelete, onChange,
+}: {
+  it: PhotoshopItem;
+  canMoveUp: boolean; canMoveDown: boolean;
+  onMoveUp: () => void; onMoveDown: () => void; onDelete: () => void;
+  onChange: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(it.prompt ?? DEFAULT_PHOTOSHOP_PROMPT);
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    setSaving(true);
+    const { error } = await supabase
+      .from("photoshop_items")
+      .update({ prompt: draft.trim() || null })
+      .eq("id", it.id);
+    setSaving(false);
+    if (error) { alert(error.message); return; }
+    setEditing(false);
+    onChange();
+  };
+
+  const isCustom = !!(it.prompt && it.prompt.trim());
+
+  return (
+    <div className="rounded-lg bg-background border border-border">
+      <div className="flex items-center gap-2 p-1.5">
+        <img src={it.image_url} alt={it.title} className="size-10 rounded object-cover" />
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-semibold truncate">{it.title}</p>
+          <p className="text-[10px] text-muted-foreground truncate">{it.hashtags.join(" ")} {it.song && `· ${it.song}`}</p>
+        </div>
+        <button
+          onClick={() => { setDraft(it.prompt ?? DEFAULT_PHOTOSHOP_PROMPT); setEditing((v) => !v); }}
+          className={`p-1.5 ${isCustom ? "text-brand" : "text-muted-foreground hover:text-foreground"}`}
+          aria-label="Edit prompt"
+          title={isCustom ? "Custom prompt" : "Default prompt"}
+        >
+          <FileText className="size-3.5" />
+        </button>
+        <button onClick={onMoveUp} disabled={!canMoveUp}
+          className="p-1.5 text-muted-foreground hover:text-foreground disabled:opacity-30" aria-label="Move up">
+          <ArrowUp className="size-3.5" />
+        </button>
+        <button onClick={onMoveDown} disabled={!canMoveDown}
+          className="p-1.5 text-muted-foreground hover:text-foreground disabled:opacity-30" aria-label="Move down">
+          <ArrowDown className="size-3.5" />
+        </button>
+        <button onClick={onDelete} className="p-1.5 text-muted-foreground hover:text-destructive" aria-label="Delete photo">
+          <Trash2 className="size-3.5" />
+        </button>
+      </div>
+      {editing && (
+        <div className="border-t border-border p-2 space-y-2">
+          <p className="text-[10px] text-muted-foreground">
+            AI prompt used when a user recreates this template. Leave as default for face replacement; customize per item (e.g. swap whole body, swap outfit only).
+          </p>
+          <textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            rows={8}
+            className="w-full bg-background border border-border rounded-lg px-2 py-1.5 text-[11px] font-mono leading-relaxed"
+          />
+          <div className="flex gap-2">
+            <button onClick={save} disabled={saving}
+              className="flex-1 inline-flex items-center justify-center gap-1 bg-brand text-white text-xs font-semibold rounded-md py-1.5 disabled:opacity-60">
+              {saving ? <Loader2 className="size-3 animate-spin" /> : <Check className="size-3" />}
+              {saving ? "Saving…" : "Save prompt"}
+            </button>
+            <button onClick={() => setDraft(DEFAULT_PHOTOSHOP_PROMPT)} disabled={saving}
+              className="px-2 text-xs font-semibold rounded-md bg-muted text-foreground">
+              Reset
+            </button>
+            <button onClick={() => setEditing(false)} disabled={saving}
+              className="px-2 text-xs font-semibold rounded-md bg-muted text-foreground">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* =========================================================================
    REELS ADMIN (original functionality)
    ========================================================================= */
