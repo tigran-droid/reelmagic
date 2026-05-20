@@ -514,6 +514,7 @@ function AddItemForm({ section, existingCount, onDone, onCancel }: {
   const [audio, setAudio] = useState<File | null>(null);
   const [audioStart, setAudioStart] = useState(0);
   const [audioEnd, setAudioEnd] = useState<number | null>(null);
+  const [prompt, setPrompt] = useState(DEFAULT_PHOTOSHOP_PROMPT);
   const [busy, setBusy] = useState(false);
 
   const submit = async () => {
@@ -536,6 +537,7 @@ function AddItemForm({ section, existingCount, onDone, onCancel }: {
         audio_start_sec: audio ? audioStart : 0,
         audio_end_sec: audio ? audioEnd : null,
         position: existingCount,
+        prompt: prompt.trim() || null,
       });
       if (error) throw error;
       onDone();
@@ -564,6 +566,21 @@ function AddItemForm({ section, existingCount, onDone, onCancel }: {
         <AudioTrimmer file={audio} start={audioStart} end={audioEnd}
           onChange={(s, e) => { setAudioStart(s); setAudioEnd(e); }} />
       )}
+      <Field label="AI prompt (used when a user recreates this template)">
+        <textarea
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+          rows={8}
+          className="w-full bg-background border border-border rounded-lg px-3 py-2 text-xs font-mono leading-relaxed"
+        />
+        <button
+          type="button"
+          onClick={() => setPrompt(DEFAULT_PHOTOSHOP_PROMPT)}
+          className="mt-1 text-[10px] text-muted-foreground hover:text-foreground underline"
+        >
+          Reset to default
+        </button>
+      </Field>
       <div className="flex gap-2 pt-1">
         <button onClick={submit} disabled={busy}
           className="flex-1 inline-flex items-center justify-center gap-1.5 bg-brand text-white text-sm font-semibold rounded-lg py-2 disabled:opacity-60">
