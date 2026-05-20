@@ -10,7 +10,8 @@ const corsHeaders = {
 
 const GEMINI_MODEL = "gemini-3.1-flash-image-preview";
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
-const MAX_IMAGE_BYTES = 2_500_000;
+const MAX_IMAGE_BYTES = 900_000;
+const MAX_IMAGE_DIM = 1024;
 
 function jsonResponse(body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -36,7 +37,7 @@ async function normalizeDataUrl(dataUrl: string): Promise<string> {
     if (blob.size <= MAX_IMAGE_BYTES) return dataUrl;
 
     const bitmap = await createImageBitmap(blob);
-    const scale = Math.min(1, 1400 / Math.max(bitmap.width, bitmap.height, 1));
+    const scale = Math.min(1, MAX_IMAGE_DIM / Math.max(bitmap.width, bitmap.height, 1));
     const width = Math.max(1, Math.round(bitmap.width * scale));
     const height = Math.max(1, Math.round(bitmap.height * scale));
 
@@ -45,7 +46,7 @@ async function normalizeDataUrl(dataUrl: string): Promise<string> {
     if (!ctx) return dataUrl;
 
     ctx.drawImage(bitmap, 0, 0, width, height);
-    const out = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.82 });
+    const out = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.78 });
     const buf = new Uint8Array(await out.arrayBuffer());
     let bin = "";
     for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i]);
@@ -102,14 +103,32 @@ export async function handleGenerateFromTemplateRequest(req: Request) {
 
     console.log("[generate-from-template] calling", GEMINI_MODEL, "images:", allImages.length);
 
-    const aiRes = await fetch(`${GEMINI_URL}?key=${geminiKey}`, {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 140_000);
+    let aiRes: Response;
+    try {
+      aiRes = await fetch(`${GEMINI_URL}?key=${geminiKey}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         contents: [{ role: "user", parts }],
         generationConfig: { responseModalities: ["IMAGE", "TEXT"] },
       }),
-    });
+        signal: controller.signal,
+      });
+    } catch (e) {
+      clearTimeout(timeoutId);
+      const aborted = e instanceof Error && e.name === "AbortError";
+      console.error("Gemini request failed", e);
+      return jsonResponse({
+        error: aborted
+          ? "Image generation took too long. Please try again."
+          : `Image generation request failed: ${e instanceof Error ? e.message : String(e)}`,
+        errorCode: aborted ? "AI_IMAGE_TIMEOUT" : "AI_IMAGE_EDIT_FAILED",
+        fallback: true,
+      });
+    }
+    clearTimeout(timeoutId);
 
     if (!aiRes.ok) {
       const text = await aiRes.text();
