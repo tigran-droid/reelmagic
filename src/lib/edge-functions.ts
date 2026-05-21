@@ -62,6 +62,15 @@ export async function invokeEdgeFunction<TBody, TResult>(
   const parsedBody = await readFunctionResponse(response);
   if (!response.ok) {
     const bodyMessage = getErrorMessageFromBody(parsedBody);
+    if (
+      response.status === 504 &&
+      /idle timeout|timeout/i.test(bodyMessage || response.statusText)
+    ) {
+      throw new Error(
+        "Image generation is taking too long. Please retry with a shorter edit or one clear photo.",
+      );
+    }
+
     throw new Error(
       `Function error ${response.status}: ${
         bodyMessage || response.statusText || "Request failed"

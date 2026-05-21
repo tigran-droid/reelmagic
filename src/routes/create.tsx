@@ -56,6 +56,8 @@ const USER_IMAGES_KEY = "create:userImages";
 const AUTORUN_KEY = "create:autoRun";
 const UPLOAD_IMAGE_MAX_EDGE = 1280;
 const UPLOAD_IMAGE_QUALITY = 0.82;
+const FOLLOW_UP_EDIT_MARKER =
+  "Edit the already generated image using this request:";
 const LEGACY_DEFAULT_PROMPT_MARKER = "You will receive multiple images.";
 
 function uid() {
@@ -123,6 +125,7 @@ function CreatePage() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const moreInputRef = useRef<HTMLInputElement>(null);
   const didAutoRun = useRef(false);
+  const latestGeneratedImage = useRef<string | null>(null);
 
   // Hydrate from sessionStorage
   useEffect(() => {
@@ -159,7 +162,11 @@ function CreatePage() {
     if (!reel || !templateUrl || imgs.length === 0) return;
     setBusy(true);
     const statusId = uid();
-    const customPrompt = promptText?.trim() || getCustomPrompt(reel.prompt);
+    const trimmedPrompt = promptText?.trim();
+    const editImageDataUrl = trimmedPrompt ? latestGeneratedImage.current : null;
+    const customPrompt = editImageDataUrl
+      ? `${FOLLOW_UP_EDIT_MARKER} ${trimmedPrompt}`
+      : trimmedPrompt || getCustomPrompt(reel.prompt);
     setMessages((m) => [
       ...m,
       {
@@ -175,7 +182,12 @@ function CreatePage() {
     ]);
     try {
       const data = await invokeEdgeFunction<
-        { templateUrl: string; userImages: string[]; prompt?: string },
+        {
+          templateUrl: string;
+          userImages: string[];
+          prompt?: string;
+          editImageDataUrl?: string;
+        },
         { imageDataUrl?: string; error?: string; fallback?: boolean }
       >(
         "generate-from-template",
@@ -184,12 +196,14 @@ function CreatePage() {
             templateUrl,
             userImages: imgs,
             ...(customPrompt ? { prompt: customPrompt } : {}),
+            ...(editImageDataUrl ? { editImageDataUrl } : {}),
           },
         },
       );
       if (data?.fallback && data?.error) throw new Error(data.error);
       if (data?.error) throw new Error(data.error);
       if (!data?.imageDataUrl) throw new Error("No image returned");
+      latestGeneratedImage.current = data.imageDataUrl;
       setMessages((m) =>
         m
           .filter((x) => x.id !== statusId)
@@ -263,6 +277,7 @@ function CreatePage() {
     e.target.value = "";
     if (files.length === 0) return;
     const urls = await Promise.all(files.map(optimizeImageForUpload));
+    latestGeneratedImage.current = null;
     setUserImages(urls);
     sessionStorage.setItem(USER_IMAGES_KEY, JSON.stringify(urls));
     setMessages((m) => [

@@ -12,12 +12,15 @@ const GEMINI_MODEL = "gemini-3.1-flash-image-preview";
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 // Keep template at higher quality (it defines the final scene),
 // downscale identity refs more aggressively — they only need to convey face.
-const MAX_IMAGE_BYTES = 450_000;
-const TEMPLATE_MAX_DIM = 896;
-const USER_REF_MAX_DIM = 640;
-const GEMINI_TIMEOUT_MS = 210_000;
-const GEMINI_MAX_ATTEMPTS = 3;
-const GEMINI_RETRY_DELAYS_MS = [2_000, 6_000];
+const MAX_IMAGE_BYTES = 320_000;
+const TEMPLATE_MAX_DIM = 768;
+const USER_REF_MAX_DIM = 512;
+const EDIT_IMAGE_MAX_DIM = 768;
+// Lovable/Supabase cuts idle requests at about 150s, so stay below it.
+const FUNCTION_BUDGET_MS = 135_000;
+const GEMINI_ATTEMPT_TIMEOUT_MS = 58_000;
+const GEMINI_MAX_ATTEMPTS = 2;
+const GEMINI_RETRY_DELAYS_MS = [2_000];
 // Hard cap on identity refs sent to the model. More images = much slower
 // inference with negligible quality gain past 2 good shots.
 const MAX_USER_REFS = 1;
@@ -59,12 +62,12 @@ async function normalizeDataUrl(dataUrl: string, maxDim: number): Promise<string
   try {
     const res = await fetch(dataUrl);
     const blob = await res.blob();
-    if (blob.size <= MAX_IMAGE_BYTES) return dataUrl;
-
     const bitmap = await createImageBitmap(blob);
     const scale = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height, 1));
     const width = Math.max(1, Math.round(bitmap.width * scale));
     const height = Math.max(1, Math.round(bitmap.height * scale));
+
+    if (blob.size <= MAX_IMAGE_BYTES && scale === 1) return dataUrl;
 
     const canvas = new OffscreenCanvas(width, height);
     const ctx = canvas.getContext("2d");
@@ -122,6 +125,7 @@ function friendlyGeminiError(status: number, message: string, parsedStatus?: str
 }
 
 export async function handleGenerateFromTemplateRequest(req: Request) {
+  const startedAt = Date.now();
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -130,17 +134,39 @@ export async function handleGenerateFromTemplateRequest(req: Request) {
     const geminiKey = Deno.env.get("GOOGLE_GEMINI_API_KEY");
     if (!geminiKey) throw new Error("GOOGLE_GEMINI_API_KEY not configured");
 
-    const { templateUrl, userImages, prompt } = await req.json();
-    if (!templateUrl) throw new Error("templateUrl required");
-    if (!Array.isArray(userImages) || userImages.length === 0) {
-      throw new Error("At least one user photo is required");
-    }
+    const { templateUrl, userImages, prompt, editImageDataUrl } = await req.json();
+    const isFollowUpEdit =
+      typeof editImageDataUrl === "string" &&
+      editImageDataUrl.length > 0 &&
+      typeof prompt === "string" &&
+      prompt.trim().length > 0;
 
     // Cap identity references — extra refs slow the model significantly
     // without improving facial fidelity.
-    const trimmedUserImages = userImages.slice(0, MAX_USER_REFS);
-
     const t0 = Date.now();
+    let instruction = "";
+    let allImages: string[] = [];
+
+    const outputInstruction =
+      "You must return exactly one generated image. Do not answer with text only.";
+
+    if (isFollowUpEdit) {
+      allImages = [await normalizeDataUrl(editImageDataUrl, EDIT_IMAGE_MAX_DIM)];
+      instruction = [
+        "You will receive one already generated image.",
+        "Edit ONLY what the user asks for.",
+        "Preserve the same person, face, pose, background, camera angle, lighting, and image quality.",
+        `User edit request: ${prompt.trim()}`,
+        outputInstruction,
+      ].join("\n");
+    } else {
+      if (!templateUrl) throw new Error("templateUrl required");
+      if (!Array.isArray(userImages) || userImages.length === 0) {
+        throw new Error("At least one user photo is required");
+      }
+
+      const trimmedUserImages = userImages.slice(0, MAX_USER_REFS);
+
     // Fetch + normalize template AND user refs fully in parallel.
     const [templateDataUrl, ...normalizedUserImages] = await Promise.all([
       urlToDataUrl(templateUrl).then((u) => normalizeDataUrl(u, TEMPLATE_MAX_DIM)),
@@ -164,16 +190,15 @@ export async function handleGenerateFromTemplateRequest(req: Request) {
       "Keep the result photorealistic, sharp and consistent with the template's camera and lens.",
       "Return exactly ONE final edited image.",
     ].join("\n");
-    const outputInstruction =
-      "You must return exactly one generated image. Do not answer with text only.";
-    const instruction = (typeof prompt === "string" && prompt.trim().length > 0)
+    instruction = (typeof prompt === "string" && prompt.trim().length > 0)
       ? `${prompt.trim()}\n\n${outputInstruction}`
       : `${DEFAULT_INSTRUCTION}\n${outputInstruction}`;
+    allImages = [templateDataUrl, ...normalizedUserImages];
+    }
 
     // Put the instruction FIRST so the model reads the role of each image
     // before seeing them, then the template, then the user refs.
     const parts: Array<Record<string, unknown>> = [{ text: instruction }];
-    const allImages = [templateDataUrl, ...normalizedUserImages];
     for (const url of allImages) {
       const m = url.match(/^data:([^;]+);base64,(.+)$/);
       const mime = m?.[1] ?? "image/png";
@@ -187,11 +212,26 @@ export async function handleGenerateFromTemplateRequest(req: Request) {
         | undefined;
 
       for (let i = 0; i < GEMINI_MAX_ATTEMPTS; i++) {
+        const remainingMs = FUNCTION_BUDGET_MS - (Date.now() - startedAt);
+        if (remainingMs < 20_000) {
+          return {
+            ok: false,
+            response: jsonResponse({
+              error: "Image generation is taking longer than usual. Please retry with a simpler edit or one clear photo.",
+              errorCode: "AI_IMAGE_TIMEOUT",
+              fallback: true,
+            }),
+          };
+        }
+
         const attemptLabel = `${attempt}-${i + 1}/${GEMINI_MAX_ATTEMPTS}`;
         console.log("[generate-from-template] calling", GEMINI_MODEL, attemptLabel, "images:", allImages.length);
 
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
+        const timeoutId = setTimeout(
+          () => controller.abort(),
+          Math.min(GEMINI_ATTEMPT_TIMEOUT_MS, remainingMs - 10_000),
+        );
         const tFetch = Date.now();
         let aiRes: Response;
         try {
@@ -235,7 +275,8 @@ export async function handleGenerateFromTemplateRequest(req: Request) {
 
         if (
           i < GEMINI_MAX_ATTEMPTS - 1 &&
-          isRetryableGeminiStatus(aiRes.status, parsed.status)
+          isRetryableGeminiStatus(aiRes.status, parsed.status) &&
+          FUNCTION_BUDGET_MS - (Date.now() - startedAt) > 35_000
         ) {
           await sleep(GEMINI_RETRY_DELAYS_MS[i] ?? 6_000);
           continue;
@@ -271,6 +312,14 @@ export async function handleGenerateFromTemplateRequest(req: Request) {
 
     let imageDataUrl = extractImageDataUrl(result.json);
     if (!imageDataUrl) {
+      if (FUNCTION_BUDGET_MS - (Date.now() - startedAt) < 45_000) {
+        return jsonResponse({
+          error: "The image editor needs one more try. Please retry with a shorter instruction.",
+          errorCode: "AI_IMAGE_EDIT_NO_OUTPUT",
+          fallback: true,
+        });
+      }
+
       console.warn("Gemini returned no image on primary attempt", JSON.stringify(result.json).slice(0, 500));
       const retryParts = [
         {
