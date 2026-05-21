@@ -12,7 +12,7 @@ import {
   History,
   MessageSquarePlus,
 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { invokeEdgeFunction } from "@/lib/edge-functions";
 
 export const Route = createFileRoute("/create")({
   head: () => ({
@@ -174,7 +174,10 @@ function CreatePage() {
       },
     ]);
     try {
-      const { data, error: fnErr } = await supabase.functions.invoke(
+      const data = await invokeEdgeFunction<
+        { templateUrl: string; userImages: string[]; prompt?: string },
+        { imageDataUrl?: string; error?: string; fallback?: boolean }
+      >(
         "generate-from-template",
         {
           body: {
@@ -184,19 +187,6 @@ function CreatePage() {
           },
         },
       );
-      if (fnErr) {
-        let msg = fnErr.message || "Generation failed";
-        try {
-          const ctx = (fnErr as unknown as { context?: Response }).context;
-          if (ctx && typeof ctx.json === "function") {
-            const body = await ctx.clone().json();
-            if (body?.error) msg = body.error;
-          }
-        } catch {
-          /* ignore */
-        }
-        throw new Error(msg);
-      }
       if (data?.fallback && data?.error) throw new Error(data.error);
       if (data?.error) throw new Error(data.error);
       if (!data?.imageDataUrl) throw new Error("No image returned");

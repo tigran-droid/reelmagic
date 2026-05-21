@@ -13,7 +13,7 @@ import {
   MessageSquarePlus,
   Video as VideoIcon,
 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { invokeEdgeFunction } from "@/lib/edge-functions";
 
 export const Route = createFileRoute("/video-create")({
   head: () => ({
@@ -167,23 +167,15 @@ function VideoCreatePage() {
 
     try {
       // STEP 1 — image
-      const { data: imgData, error: imgErr } = await supabase.functions.invoke(
+      const imgData = await invokeEdgeFunction<
+        { templateUrl: string; userImages: string[] },
+        { imageDataUrl?: string; error?: string; fallback?: boolean }
+      >(
         "generate-from-template",
         {
           body: { templateUrl: item.cover_image_url, userImages: imgs },
         },
       );
-      if (imgErr) {
-        let msg = imgErr.message || "Image generation failed";
-        try {
-          const ctx = (imgErr as unknown as { context?: Response }).context;
-          if (ctx && typeof ctx.json === "function") {
-            const body = await ctx.clone().json();
-            if (body?.error) msg = body.error;
-          }
-        } catch { /* ignore */ }
-        throw new Error(msg);
-      }
       if (imgData?.fallback && imgData?.error) throw new Error(imgData.error);
       if (imgData?.error) throw new Error(imgData.error);
       const imageDataUrl: string | undefined = imgData?.imageDataUrl;
@@ -217,7 +209,21 @@ function VideoCreatePage() {
       const maxMs = 5 * 60 * 1000;
       let videoUrl: string | null = null;
 
-      const { data: startData, error: startErr } = await supabase.functions.invoke(
+      const startData = await invokeEdgeFunction<
+        {
+          action: "start";
+          imageDataUrl: string;
+          prompt: string;
+          duration: number;
+          resolution: string;
+        },
+        {
+          operationName?: string;
+          statusUrl?: string;
+          responseUrl?: string;
+          error?: string;
+        }
+      >(
         "generate-video",
         {
           body: {
@@ -229,7 +235,6 @@ function VideoCreatePage() {
           },
         },
       );
-      if (startErr) throw new Error(startErr.message || "Video start failed");
       if (startData?.error) throw new Error(startData.error);
       const operationName: string | undefined = startData?.operationName;
       if (!operationName) throw new Error("No operation name returned");
@@ -239,11 +244,18 @@ function VideoCreatePage() {
       const startTs = Date.now();
       while (Date.now() - startTs < maxMs) {
         await new Promise((r) => setTimeout(r, 6000));
-        const { data: pollData, error: pollErr } = await supabase.functions.invoke(
+        const pollData = await invokeEdgeFunction<
+          {
+            action: "poll";
+            operationName: string;
+            statusUrl?: string;
+            responseUrl?: string;
+          },
+          { done?: boolean; videoUrl?: string; error?: string }
+        >(
           "generate-video",
           { body: { action: "poll", operationName, statusUrl, responseUrl } },
         );
-        if (pollErr) throw new Error(pollErr.message || "Polling failed");
         if (pollData?.done) {
           if (pollData.videoUrl) {
             videoUrl = pollData.videoUrl;

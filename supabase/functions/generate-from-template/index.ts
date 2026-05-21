@@ -16,6 +16,8 @@ const MAX_IMAGE_BYTES = 450_000;
 const TEMPLATE_MAX_DIM = 896;
 const USER_REF_MAX_DIM = 640;
 const GEMINI_TIMEOUT_MS = 210_000;
+const GEMINI_MAX_ATTEMPTS = 3;
+const GEMINI_RETRY_DELAYS_MS = [2_000, 6_000];
 // Hard cap on identity refs sent to the model. More images = much slower
 // inference with negligible quality gain past 2 good shots.
 const MAX_USER_REFS = 1;
@@ -79,6 +81,46 @@ async function normalizeDataUrl(dataUrl: string, maxDim: number): Promise<string
   }
 }
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function parseGeminiError(text: string) {
+  try {
+    const parsed = JSON.parse(text);
+    const err = parsed?.error;
+    return {
+      code: typeof err?.code === "number" ? err.code : undefined,
+      status: typeof err?.status === "string" ? err.status : undefined,
+      message: typeof err?.message === "string" ? err.message : text,
+    };
+  } catch {
+    return { message: text };
+  }
+}
+
+function isRetryableGeminiStatus(status: number, parsedStatus?: string) {
+  return (
+    status === 429 ||
+    status === 500 ||
+    status === 502 ||
+    status === 503 ||
+    status === 504 ||
+    parsedStatus === "UNAVAILABLE" ||
+    parsedStatus === "RESOURCE_EXHAUSTED"
+  );
+}
+
+function friendlyGeminiError(status: number, message: string, parsedStatus?: string) {
+  if (status === 503 || parsedStatus === "UNAVAILABLE") {
+    return "AI image server is busy right now. Please try again in a minute.";
+  }
+  if (status === 429 || parsedStatus === "RESOURCE_EXHAUSTED") {
+    return "AI image generation limit is busy right now. Please wait a little and try again.";
+  }
+  return `Image edit failed [${status}]: ${message.slice(0, 220)}`;
+}
+
 export async function handleGenerateFromTemplateRequest(req: Request) {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -140,60 +182,88 @@ export async function handleGenerateFromTemplateRequest(req: Request) {
     }
 
     async function callGemini(requestParts: Array<Record<string, unknown>>, attempt: string) {
-      console.log("[generate-from-template] calling", GEMINI_MODEL, attempt, "images:", allImages.length);
+      let lastError:
+        | { status: number; message: string; parsedStatus?: string }
+        | undefined;
 
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
-      const tFetch = Date.now();
-      let aiRes: Response;
-      try {
-        aiRes = await fetch(`${GEMINI_URL}?key=${geminiKey}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [{ role: "user", parts: requestParts }],
-            generationConfig: { responseModalities: ["IMAGE", "TEXT"] },
-          }),
-          signal: controller.signal,
-        });
-      } catch (e) {
+      for (let i = 0; i < GEMINI_MAX_ATTEMPTS; i++) {
+        const attemptLabel = `${attempt}-${i + 1}/${GEMINI_MAX_ATTEMPTS}`;
+        console.log("[generate-from-template] calling", GEMINI_MODEL, attemptLabel, "images:", allImages.length);
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
+        const tFetch = Date.now();
+        let aiRes: Response;
+        try {
+          aiRes = await fetch(`${GEMINI_URL}?key=${geminiKey}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [{ role: "user", parts: requestParts }],
+              generationConfig: { responseModalities: ["IMAGE", "TEXT"] },
+            }),
+            signal: controller.signal,
+          });
+        } catch (e) {
+          clearTimeout(timeoutId);
+          const aborted = e instanceof Error && e.name === "AbortError";
+          console.error("Gemini request failed", e);
+          return {
+            ok: false,
+            response: jsonResponse({
+              error: aborted
+                ? "Image generation is taking longer than usual. Try one clear face photo or retry in a moment."
+                : `Image generation request failed: ${e instanceof Error ? e.message : String(e)}`,
+              errorCode: aborted ? "AI_IMAGE_TIMEOUT" : "AI_IMAGE_EDIT_FAILED",
+              fallback: true,
+            }),
+          };
+        }
         clearTimeout(timeoutId);
-        const aborted = e instanceof Error && e.name === "AbortError";
-        console.error("Gemini request failed", e);
-        return {
-          ok: false,
-          response: jsonResponse({
-            error: aborted
-              ? "Image generation is taking longer than usual. Try one clear face photo or retry in a moment."
-              : `Image generation request failed: ${e instanceof Error ? e.message : String(e)}`,
-            errorCode: aborted ? "AI_IMAGE_TIMEOUT" : "AI_IMAGE_EDIT_FAILED",
-            fallback: true,
-          }),
-        };
-      }
-      clearTimeout(timeoutId);
-      console.log("[generate-from-template] gemini ms:", Date.now() - tFetch);
+        console.log("[generate-from-template] gemini ms:", Date.now() - tFetch);
 
-      if (!aiRes.ok) {
+        if (aiRes.ok) return { ok: true, json: await aiRes.json() };
+
         const text = await aiRes.text();
-        console.error("Gemini image error", aiRes.status, text);
-        const errorCode =
-          aiRes.status === 429
-            ? "RATE_LIMITED"
-            : aiRes.status === 402
-              ? "PAYMENT_REQUIRED"
-              : "AI_IMAGE_EDIT_FAILED";
-        return {
-          ok: false,
-          response: jsonResponse({
-            error: `Image edit failed [${aiRes.status}]: ${text.slice(0, 300)}`,
-            errorCode,
-            fallback: true,
-          }),
+        const parsed = parseGeminiError(text);
+        console.error("Gemini image error", aiRes.status, parsed.message);
+        lastError = {
+          status: aiRes.status,
+          message: parsed.message,
+          parsedStatus: parsed.status,
         };
+
+        if (
+          i < GEMINI_MAX_ATTEMPTS - 1 &&
+          isRetryableGeminiStatus(aiRes.status, parsed.status)
+        ) {
+          await sleep(GEMINI_RETRY_DELAYS_MS[i] ?? 6_000);
+          continue;
+        }
+
+        break;
       }
 
-      return { ok: true, json: await aiRes.json() };
+      const status = lastError?.status ?? 500;
+      const parsedStatus = lastError?.parsedStatus;
+      const message = lastError?.message ?? "Unknown image generation error";
+      const errorCode =
+        status === 429 || parsedStatus === "RESOURCE_EXHAUSTED"
+          ? "RATE_LIMITED"
+          : status === 402
+            ? "PAYMENT_REQUIRED"
+            : status === 503 || parsedStatus === "UNAVAILABLE"
+              ? "AI_IMAGE_MODEL_BUSY"
+              : "AI_IMAGE_EDIT_FAILED";
+
+      return {
+        ok: false,
+        response: jsonResponse({
+          error: friendlyGeminiError(status, message, parsedStatus),
+          errorCode,
+          fallback: true,
+        }),
+      };
     }
 
     let result = await callGemini(parts, "primary");
