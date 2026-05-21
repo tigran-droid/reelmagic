@@ -39,13 +39,24 @@ type ChatMessage =
   | { id: string; role: "user"; kind: "images"; images: string[] }
   | { id: string; role: "user"; kind: "text"; text: string }
   | { id: string; role: "assistant"; kind: "ref"; templateUrl: string; label: string }
-  | { id: string; role: "assistant"; kind: "status"; text: string; progress?: number }
+  | {
+      id: string;
+      role: "assistant";
+      kind: "status";
+      text: string;
+      progress?: number;
+      templateUrl?: string;
+      userPreview?: string;
+    }
   | { id: string; role: "assistant"; kind: "result"; imageDataUrl: string }
   | { id: string; role: "assistant"; kind: "error"; text: string };
 
 const DRAFT_KEY = "create:draft";
 const USER_IMAGES_KEY = "create:userImages";
 const AUTORUN_KEY = "create:autoRun";
+const UPLOAD_IMAGE_MAX_EDGE = 1280;
+const UPLOAD_IMAGE_QUALITY = 0.82;
+const LEGACY_DEFAULT_PROMPT_MARKER = "You will receive multiple images.";
 
 function uid() {
   return Math.random().toString(36).slice(2);
@@ -58,6 +69,48 @@ function fileToDataUrl(file: File): Promise<string> {
     r.onerror = () => reject(r.error);
     r.readAsDataURL(file);
   });
+}
+
+function loadImage(dataUrl: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("Failed to load selected image"));
+    img.src = dataUrl;
+  });
+}
+
+async function optimizeImageForUpload(file: File): Promise<string> {
+  const originalDataUrl = await fileToDataUrl(file);
+
+  try {
+    const image = await loadImage(originalDataUrl);
+    const longestEdge = Math.max(image.naturalWidth, image.naturalHeight);
+    const scale = Math.min(1, UPLOAD_IMAGE_MAX_EDGE / Math.max(longestEdge, 1));
+    const width = Math.max(1, Math.round(image.naturalWidth * scale));
+    const height = Math.max(1, Math.round(image.naturalHeight * scale));
+
+    if (scale === 1 && file.size < 1_200_000) return originalDataUrl;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return originalDataUrl;
+
+    ctx.drawImage(image, 0, 0, width, height);
+    return canvas.toDataURL("image/jpeg", UPLOAD_IMAGE_QUALITY);
+  } catch {
+    return originalDataUrl;
+  }
+}
+
+function getCustomPrompt(prompt?: string | null) {
+  const trimmed = prompt?.trim();
+  if (!trimmed) return undefined;
+  if (trimmed.startsWith(LEGACY_DEFAULT_PROMPT_MARKER)) return undefined;
+  return trimmed;
 }
 
 function CreatePage() {
@@ -106,6 +159,7 @@ function CreatePage() {
     if (!reel || !templateUrl || imgs.length === 0) return;
     setBusy(true);
     const statusId = uid();
+    const customPrompt = promptText?.trim() || getCustomPrompt(reel.prompt);
     setMessages((m) => [
       ...m,
       {
@@ -115,6 +169,8 @@ function CreatePage() {
         text: promptText
           ? "Recreating with your notes…"
           : "Recreating your photo…",
+        templateUrl,
+        userPreview: imgs[0],
       },
     ]);
     try {
@@ -124,11 +180,7 @@ function CreatePage() {
           body: {
             templateUrl,
             userImages: imgs,
-            ...(promptText
-              ? { prompt: promptText }
-              : reel.prompt
-                ? { prompt: reel.prompt }
-                : {}),
+            ...(customPrompt ? { prompt: customPrompt } : {}),
           },
         },
       );
@@ -220,7 +272,7 @@ function CreatePage() {
     const files = Array.from(e.target.files ?? []).slice(0, 4);
     e.target.value = "";
     if (files.length === 0) return;
-    const urls = await Promise.all(files.map(fileToDataUrl));
+    const urls = await Promise.all(files.map(optimizeImageForUpload));
     setUserImages(urls);
     sessionStorage.setItem(USER_IMAGES_KEY, JSON.stringify(urls));
     setMessages((m) => [
@@ -406,36 +458,11 @@ function MessageBubble({
   }
 
   if (msg.role === "assistant" && msg.kind === "status") {
-    return (
-      <div className="flex">
-        <div className="rounded-2xl bg-white border border-black/5 px-3.5 py-3 shadow-sm flex items-center gap-2.5 text-[15px]">
-          <Sparkles className="size-4 text-sky-500 animate-pulse" />
-          <span className="font-semibold text-sky-500">{msg.text}</span>
-        </div>
-      </div>
-    );
+    return <GenerationStatusBubble msg={msg} />;
   }
 
   if (msg.role === "assistant" && msg.kind === "result") {
-    return (
-      <div className="flex">
-        <div className="relative rounded-2xl overflow-hidden bg-black w-[260px]">
-          <img
-            src={msg.imageDataUrl}
-            alt="Generated"
-            className="w-full aspect-[3/4] object-cover"
-          />
-          <a
-            href={msg.imageDataUrl}
-            download={`${filenameBase}.png`}
-            className="absolute bottom-2 right-2 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-white/90 text-foreground text-[11px] font-semibold shadow"
-          >
-            <Download className="size-3.5" />
-            Save
-          </a>
-        </div>
-      </div>
-    );
+    return <GeneratedImageBubble imageDataUrl={msg.imageDataUrl} filenameBase={filenameBase} />;
   }
 
   if (msg.role === "assistant" && msg.kind === "error") {
@@ -450,4 +477,119 @@ function MessageBubble({
   }
 
   return null;
+}
+
+function GenerationStatusBubble({
+  msg,
+}: {
+  msg: Extract<ChatMessage, { role: "assistant"; kind: "status" }>;
+}) {
+  const [seconds, setSeconds] = useState(0);
+
+  useEffect(() => {
+    const id = window.setInterval(() => setSeconds((s) => s + 1), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const stages = [
+    "Preparing your photos",
+    "Reading the template style",
+    "Blending your identity",
+    "Painting the final details",
+    "Almost ready",
+  ];
+  const stage = stages[Math.min(stages.length - 1, Math.floor(seconds / 8))];
+  const progress = Math.min(92, 12 + seconds * 4);
+  const previewSrc = msg.userPreview ?? msg.templateUrl;
+  const previewOpacity = Math.min(0.86, 0.18 + seconds * 0.04);
+  const previewBlur = Math.max(3, 18 - seconds * 0.8);
+
+  return (
+    <div className="flex">
+      <div className="w-[286px] rounded-[28px] bg-white border border-black/5 shadow-sm overflow-hidden">
+        <div className="px-4 py-3 flex items-center gap-3">
+          <div className="relative size-10 shrink-0">
+            <div className="absolute inset-0 rounded-full border-2 border-sky-100" />
+            <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-sky-500 animate-spin" />
+            <Sparkles className="absolute inset-0 m-auto size-4 text-sky-500" />
+          </div>
+          <div className="min-w-0">
+            <div className="text-[15px] font-bold text-sky-500 leading-tight">
+              {seconds < 2 ? msg.text : stage}
+            </div>
+            <div className="text-[11px] text-muted-foreground mt-0.5">
+              Keep this screen open
+            </div>
+          </div>
+        </div>
+
+        {previewSrc && seconds >= 2 && (
+          <div className="px-3 pb-3">
+            <div className="relative aspect-[3/4] overflow-hidden rounded-2xl bg-[oklch(0.92_0.02_245)]">
+              <img
+                src={previewSrc}
+                alt=""
+                className="absolute inset-0 size-full object-cover transition-all duration-700"
+                style={{
+                  opacity: previewOpacity,
+                  filter: `blur(${previewBlur}px) saturate(1.08)`,
+                  transform: "scale(1.08)",
+                }}
+              />
+              <div className="absolute inset-0 bg-gradient-to-br from-white/70 via-sky-100/35 to-black/15" />
+              <div className="absolute inset-x-4 bottom-4">
+                <div className="h-1.5 overflow-hidden rounded-full bg-white/70">
+                  <div
+                    className="h-full rounded-full bg-sky-500 transition-all duration-700"
+                    style={{ width: `${progress}%` }}
+                  />
+                </div>
+                <div className="mt-2 text-[11px] font-semibold text-white drop-shadow">
+                  Generating preview...
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function GeneratedImageBubble({
+  imageDataUrl,
+  filenameBase,
+}: {
+  imageDataUrl: string;
+  filenameBase: string;
+}) {
+  const [loaded, setLoaded] = useState(false);
+
+  return (
+    <div className="flex">
+      <div className="relative rounded-2xl overflow-hidden bg-black w-[260px]">
+        {!loaded && (
+          <div className="absolute inset-0 z-10 grid place-items-center bg-sky-50">
+            <Loader2 className="size-6 animate-spin text-sky-500" />
+          </div>
+        )}
+        <img
+          src={imageDataUrl}
+          alt="Generated"
+          onLoad={() => setLoaded(true)}
+          className={`w-full aspect-[3/4] object-cover transition-all duration-1000 ${
+            loaded ? "opacity-100 blur-0 scale-100" : "opacity-30 blur-xl scale-105"
+          }`}
+        />
+        <a
+          href={imageDataUrl}
+          download={`${filenameBase}.png`}
+          className="absolute bottom-2 right-2 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-white/90 text-foreground text-[11px] font-semibold shadow"
+        >
+          <Download className="size-3.5" />
+          Save
+        </a>
+      </div>
+    </div>
+  );
 }

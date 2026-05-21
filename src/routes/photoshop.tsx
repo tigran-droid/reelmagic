@@ -32,6 +32,12 @@ type SectionRow = {
   created_at: string;
 };
 
+const SECTION_SELECT = "id,title,position,created_at";
+const ITEM_SELECT = "id,section_id,title,hashtags,song,image_url,image_urls,position,created_at";
+const MAX_SECTIONS = 20;
+const MAX_ITEMS = 240;
+const CACHE_TIME_MS = 5 * 60_000;
+
 function Photoshop() {
   const navigate = useNavigate();
 
@@ -39,18 +45,35 @@ function Photoshop() {
     queryKey: ["photoshop-sections"],
     queryFn: async () => {
       const [secRes, itemRes] = await Promise.all([
-        supabase.from("photoshop_sections").select("*").order("position").order("created_at"),
-        supabase.from("photoshop_items").select("*").order("position").order("created_at"),
+        supabase
+          .from("photoshop_sections")
+          .select(SECTION_SELECT)
+          .order("position")
+          .order("created_at")
+          .limit(MAX_SECTIONS),
+        supabase
+          .from("photoshop_items")
+          .select(ITEM_SELECT)
+          .order("position")
+          .order("created_at")
+          .limit(MAX_ITEMS),
       ]);
       if (secRes.error) throw secRes.error;
       if (itemRes.error) throw itemRes.error;
+      const itemsBySection = new Map<string, ItemRow[]>();
+      for (const item of itemRes.data as ItemRow[]) {
+        const sectionItems = itemsBySection.get(item.section_id) ?? [];
+        sectionItems.push(item);
+        itemsBySection.set(item.section_id, sectionItems);
+      }
       const sections = (secRes.data as SectionRow[]).map((s) => ({
         ...s,
-        items: (itemRes.data as ItemRow[]).filter((i) => i.section_id === s.id),
+        items: itemsBySection.get(s.id) ?? [],
       }));
       return sections;
     },
-    staleTime: 60_000,
+    staleTime: CACHE_TIME_MS,
+    gcTime: CACHE_TIME_MS * 2,
     refetchOnWindowFocus: false,
   });
 
@@ -81,7 +104,14 @@ function Photoshop() {
                 onClick={() => goItem(f.id)}
                 className="flex-none w-56 aspect-[5/4] rounded-md overflow-hidden relative bg-secondary snap-start ring-1 ring-border"
               >
-                <img src={f.image_url} alt={f.title} loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
+                <img
+                  src={f.image_url}
+                  alt={f.title}
+                  loading={i === 0 ? "eager" : "lazy"}
+                  decoding="async"
+                  fetchPriority={i === 0 ? "high" : "auto"}
+                  className="absolute inset-0 w-full h-full object-cover"
+                />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/15 to-transparent" />
                 <div className="absolute top-3 left-3">
                   <div className="px-2.5 py-1 bg-white rounded-full text-[10px] font-extrabold text-foreground flex items-center gap-1 shadow">
@@ -116,7 +146,13 @@ function Photoshop() {
                     onClick={() => goItem(p.id)}
                     className="flex-none w-32 aspect-[5/6] snap-start rounded-md overflow-hidden relative bg-secondary ring-1 ring-border"
                   >
-                    <img src={p.image_url} alt={p.title} loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
+                    <img
+                      src={p.image_url}
+                      alt={p.title}
+                      loading="lazy"
+                      decoding="async"
+                      className="absolute inset-0 w-full h-full object-cover"
+                    />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/10 to-transparent" />
                     <div className="absolute bottom-3 left-3 right-3 text-left">
                       <div className="text-white text-sm font-extrabold leading-tight">{p.title}</div>

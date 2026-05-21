@@ -18,6 +18,71 @@ type Item = {
   prompt?: string | null;
 };
 
+type FeedItemRow = {
+  id: string;
+  image_url: string;
+  image_urls: string[] | null;
+  title: string;
+  hashtags: string[] | null;
+  song: string | null;
+  audio_url: string | null;
+  audio_start_sec: number | string | null;
+  audio_end_sec: number | string | null;
+  prompt?: string | null;
+  created_at: string;
+};
+
+const FEED_SELECT =
+  "id,image_url,image_urls,title,hashtags,song,audio_url,audio_start_sec,audio_end_sec,prompt,created_at";
+const FEED_PAGE_SIZE = 120;
+const CACHE_TIME_MS = 5 * 60_000;
+const UPLOAD_IMAGE_MAX_EDGE = 1280;
+const UPLOAD_IMAGE_QUALITY = 0.82;
+
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result as string);
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(file);
+  });
+}
+
+function loadImage(dataUrl: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("Failed to load selected image"));
+    img.src = dataUrl;
+  });
+}
+
+async function optimizeImageForUpload(file: File): Promise<string> {
+  const originalDataUrl = await fileToDataUrl(file);
+
+  try {
+    const image = await loadImage(originalDataUrl);
+    const longestEdge = Math.max(image.naturalWidth, image.naturalHeight);
+    const scale = Math.min(1, UPLOAD_IMAGE_MAX_EDGE / Math.max(longestEdge, 1));
+    const width = Math.max(1, Math.round(image.naturalWidth * scale));
+    const height = Math.max(1, Math.round(image.naturalHeight * scale));
+
+    if (scale === 1 && file.size < 1_200_000) return originalDataUrl;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return originalDataUrl;
+
+    ctx.drawImage(image, 0, 0, width, height);
+    return canvas.toDataURL("image/jpeg", UPLOAD_IMAGE_QUALITY);
+  } catch {
+    return originalDataUrl;
+  }
+}
+
 export const Route = createFileRoute("/photoshop_/feed")({
   validateSearch: (s: Record<string, unknown>) => ({
     item: typeof s.item === "string" ? s.item : undefined,
@@ -43,14 +108,31 @@ function PhotoshopFeed() {
   const didJumpRef = useRef(false);
 
   const q = useQuery({
-    queryKey: ["photoshop-feed"],
+    queryKey: ["photoshop-feed", targetId ?? null],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const feedQuery = supabase
         .from("photoshop_items")
-        .select("*")
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data.map<Item>((r) => {
+        .select(FEED_SELECT)
+        .order("created_at", { ascending: false })
+        .range(0, FEED_PAGE_SIZE - 1);
+
+      const [feedRes, targetRes] = await Promise.all([
+        feedQuery,
+        targetId
+          ? supabase.from("photoshop_items").select(FEED_SELECT).eq("id", targetId).maybeSingle()
+          : Promise.resolve({ data: null, error: null }),
+      ]);
+
+      if (feedRes.error) throw feedRes.error;
+      if (targetRes.error) throw targetRes.error;
+
+      const rows = [...((feedRes.data ?? []) as FeedItemRow[])];
+      const targetRow = targetRes.data as FeedItemRow | null;
+      if (targetRow && !rows.some((r) => r.id === targetRow.id)) {
+        rows.unshift(targetRow);
+      }
+
+      return rows.map<Item>((r) => {
         const imgs = r.image_urls && r.image_urls.length > 0 ? r.image_urls : [r.image_url];
         return {
           id: r.id,
@@ -62,11 +144,12 @@ function PhotoshopFeed() {
           audio: r.audio_url,
           audioStart: Number(r.audio_start_sec ?? 0),
           audioEnd: r.audio_end_sec != null ? Number(r.audio_end_sec) : null,
-          prompt: (r as { prompt?: string | null }).prompt ?? null,
+          prompt: r.prompt ?? null,
         };
       });
     },
-    staleTime: 60_000,
+    staleTime: CACHE_TIME_MS,
+    gcTime: CACHE_TIME_MS * 2,
     refetchOnWindowFocus: false,
   });
 
@@ -144,12 +227,7 @@ function PhotoshopFeed() {
     const files = Array.from(e.target.files ?? []).slice(0, 4);
     e.target.value = "";
     if (files.length === 0) return;
-    const dataUrls = await Promise.all(files.map((f) => new Promise<string>((res, rej) => {
-      const r = new FileReader();
-      r.onload = () => res(r.result as string);
-      r.onerror = () => rej(r.error);
-      r.readAsDataURL(f);
-    })));
+    const dataUrls = await Promise.all(files.map(optimizeImageForUpload));
     sessionStorage.setItem("create:userImages", JSON.stringify(dataUrls));
     sessionStorage.setItem("create:autoRun", "1");
     navigate({ to: "/create" });

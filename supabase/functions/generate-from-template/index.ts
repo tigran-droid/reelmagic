@@ -12,18 +12,35 @@ const GEMINI_MODEL = "gemini-3.1-flash-image-preview";
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 // Keep template at higher quality (it defines the final scene),
 // downscale identity refs more aggressively — they only need to convey face.
-const MAX_IMAGE_BYTES = 600_000;
-const TEMPLATE_MAX_DIM = 1024;
-const USER_REF_MAX_DIM = 768;
+const MAX_IMAGE_BYTES = 450_000;
+const TEMPLATE_MAX_DIM = 896;
+const USER_REF_MAX_DIM = 640;
+const GEMINI_TIMEOUT_MS = 210_000;
 // Hard cap on identity refs sent to the model. More images = much slower
 // inference with negligible quality gain past 2 good shots.
-const MAX_USER_REFS = 2;
+const MAX_USER_REFS = 1;
 
 function jsonResponse(body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
+}
+
+function extractImageDataUrl(json: Record<string, unknown>): string | undefined {
+  const respParts = json?.candidates?.[0]?.content?.parts ?? [];
+  for (const p of respParts) {
+    const inline = p?.inline_data ?? p?.inlineData;
+    if (inline?.data) {
+      const mime = inline.mime_type ?? inline.mimeType ?? "image/png";
+      return `data:${mime};base64,${inline.data}`;
+    }
+
+    const file = p?.file_data ?? p?.fileData;
+    const uri = file?.file_uri ?? file?.fileUri;
+    if (typeof uri === "string" && uri.length > 0) return uri;
+  }
+  return undefined;
 }
 
 async function urlToDataUrl(url: string): Promise<string> {
@@ -105,9 +122,11 @@ export async function handleGenerateFromTemplateRequest(req: Request) {
       "Keep the result photorealistic, sharp and consistent with the template's camera and lens.",
       "Return exactly ONE final edited image.",
     ].join("\n");
+    const outputInstruction =
+      "You must return exactly one generated image. Do not answer with text only.";
     const instruction = (typeof prompt === "string" && prompt.trim().length > 0)
-      ? prompt
-      : DEFAULT_INSTRUCTION;
+      ? `${prompt.trim()}\n\n${outputInstruction}`
+      : `${DEFAULT_INSTRUCTION}\n${outputInstruction}`;
 
     // Put the instruction FIRST so the model reads the role of each image
     // before seeing them, then the template, then the user refs.
@@ -120,68 +139,84 @@ export async function handleGenerateFromTemplateRequest(req: Request) {
       parts.push({ inline_data: { mime_type: mime, data } });
     }
 
-    console.log("[generate-from-template] calling", GEMINI_MODEL, "images:", allImages.length);
+    async function callGemini(requestParts: Array<Record<string, unknown>>, attempt: string) {
+      console.log("[generate-from-template] calling", GEMINI_MODEL, attempt, "images:", allImages.length);
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 140_000);
-    const tFetch = Date.now();
-    let aiRes: Response;
-    try {
-      aiRes = await fetch(`${GEMINI_URL}?key=${geminiKey}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ role: "user", parts }],
-        generationConfig: { responseModalities: ["IMAGE", "TEXT"] },
-      }),
-        signal: controller.signal,
-      });
-    } catch (e) {
-      clearTimeout(timeoutId);
-      const aborted = e instanceof Error && e.name === "AbortError";
-      console.error("Gemini request failed", e);
-      return jsonResponse({
-        error: aborted
-          ? "Image generation took too long. Please try again."
-          : `Image generation request failed: ${e instanceof Error ? e.message : String(e)}`,
-        errorCode: aborted ? "AI_IMAGE_TIMEOUT" : "AI_IMAGE_EDIT_FAILED",
-        fallback: true,
-      });
-    }
-    clearTimeout(timeoutId);
-    console.log("[generate-from-template] gemini ms:", Date.now() - tFetch);
-
-    if (!aiRes.ok) {
-      const text = await aiRes.text();
-      console.error("Gemini image error", aiRes.status, text);
-      const errorCode =
-        aiRes.status === 429
-          ? "RATE_LIMITED"
-          : aiRes.status === 402
-            ? "PAYMENT_REQUIRED"
-            : "AI_IMAGE_EDIT_FAILED";
-      return jsonResponse({
-        error: `Image edit failed [${aiRes.status}]: ${text.slice(0, 300)}`,
-        errorCode,
-        fallback: true,
-      });
-    }
-
-    const json = await aiRes.json();
-    let imageDataUrl: string | undefined;
-    const respParts = json?.candidates?.[0]?.content?.parts ?? [];
-    for (const p of respParts) {
-      const inline = p?.inline_data ?? p?.inlineData;
-      if (inline?.data) {
-        const mime = inline.mime_type ?? inline.mimeType ?? "image/png";
-        imageDataUrl = `data:${mime};base64,${inline.data}`;
-        break;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
+      const tFetch = Date.now();
+      let aiRes: Response;
+      try {
+        aiRes = await fetch(`${GEMINI_URL}?key=${geminiKey}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ role: "user", parts: requestParts }],
+            generationConfig: { responseModalities: ["IMAGE", "TEXT"] },
+          }),
+          signal: controller.signal,
+        });
+      } catch (e) {
+        clearTimeout(timeoutId);
+        const aborted = e instanceof Error && e.name === "AbortError";
+        console.error("Gemini request failed", e);
+        return {
+          ok: false,
+          response: jsonResponse({
+            error: aborted
+              ? "Image generation is taking longer than usual. Try one clear face photo or retry in a moment."
+              : `Image generation request failed: ${e instanceof Error ? e.message : String(e)}`,
+            errorCode: aborted ? "AI_IMAGE_TIMEOUT" : "AI_IMAGE_EDIT_FAILED",
+            fallback: true,
+          }),
+        };
       }
+      clearTimeout(timeoutId);
+      console.log("[generate-from-template] gemini ms:", Date.now() - tFetch);
+
+      if (!aiRes.ok) {
+        const text = await aiRes.text();
+        console.error("Gemini image error", aiRes.status, text);
+        const errorCode =
+          aiRes.status === 429
+            ? "RATE_LIMITED"
+            : aiRes.status === 402
+              ? "PAYMENT_REQUIRED"
+              : "AI_IMAGE_EDIT_FAILED";
+        return {
+          ok: false,
+          response: jsonResponse({
+            error: `Image edit failed [${aiRes.status}]: ${text.slice(0, 300)}`,
+            errorCode,
+            fallback: true,
+          }),
+        };
+      }
+
+      return { ok: true, json: await aiRes.json() };
     }
+
+    let result = await callGemini(parts, "primary");
+    if (!result.ok) return result.response;
+
+    let imageDataUrl = extractImageDataUrl(result.json);
     if (!imageDataUrl) {
-      console.error("Gemini returned no image", JSON.stringify(json).slice(0, 500));
+      console.warn("Gemini returned no image on primary attempt", JSON.stringify(result.json).slice(0, 500));
+      const retryParts = [
+        {
+          text: `${instruction}\n\nRetry because the previous response did not include image data. Generate the edited image now. No explanation, no text-only answer.`,
+        },
+        ...parts.slice(1),
+      ];
+      result = await callGemini(retryParts, "retry-image-only");
+      if (!result.ok) return result.response;
+      imageDataUrl = extractImageDataUrl(result.json);
+    }
+
+    if (!imageDataUrl) {
+      console.error("Gemini returned no image after retry", JSON.stringify(result.json).slice(0, 500));
       return jsonResponse({
-        error: "The image editor did not return an image.",
+        error: "The image editor did not return an image. Try a clearer face photo or another template.",
         errorCode: "AI_IMAGE_EDIT_NO_OUTPUT",
         fallback: true,
       });
