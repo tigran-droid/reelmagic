@@ -167,7 +167,7 @@ async function buildGeminiParts(body: Record<string, unknown>) {
     ]);
     allImages = [templateDataUrl, ...normalizedUserImages];
 
-    const DEFAULT_INSTRUCTION = [
+    const BASE_TEMPLATE_INSTRUCTION = [
       "You will receive multiple images.",
       "Image 1 is the TEMPLATE scene; keep its composition, framing, pose, lighting, color grading, wardrobe, background and overall style exactly as shown.",
       "The remaining images are REFERENCE photos of the USER; use them ONLY as the identity source.",
@@ -178,9 +178,21 @@ async function buildGeminiParts(body: Record<string, unknown>) {
       "Keep the result photorealistic, sharp and consistent with the template's camera and lens.",
       "Return exactly ONE final edited image.",
     ].join("\n");
-    instruction = typeof prompt === "string" && prompt.trim().length > 0
-      ? `${prompt.trim()}\n\n${outputInstruction}`
-      : `${DEFAULT_INSTRUCTION}\n${outputInstruction}`;
+
+    const extraPrompt =
+      typeof prompt === "string" && prompt.trim().length > 0
+        ? [
+            "Additional template notes from the app:",
+            prompt.trim(),
+            "These notes can describe the scene or style, but they must NOT override the identity replacement rules above.",
+          ].join("\n")
+        : "";
+
+    instruction = [
+      BASE_TEMPLATE_INSTRUCTION,
+      extraPrompt,
+      outputInstruction,
+    ].filter(Boolean).join("\n\n");
   }
 
   const parts: Array<Record<string, unknown>> = [{ text: instruction }];
