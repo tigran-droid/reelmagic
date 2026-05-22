@@ -275,7 +275,6 @@ async function callGemini(
           contents: [{ role: "user", parts: requestParts }],
           generationConfig: {
             responseModalities: ["TEXT", "IMAGE"],
-            responseFormat: { image: { aspectRatio: "3:4" } },
           },
         }),
         signal: controller.signal,
