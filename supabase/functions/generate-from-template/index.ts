@@ -11,7 +11,6 @@ const corsHeaders = {
 
 const GEMINI_MODELS = [
   "gemini-3.1-flash-image-preview",
-  "gemini-3-pro-image-preview",
   "gemini-2.5-flash-image",
 ];
 const MAX_IMAGE_BYTES = 480_000;
@@ -19,7 +18,7 @@ const TEMPLATE_MAX_DIM = 768;
 const USER_REF_MAX_DIM = 768;
 const EDIT_IMAGE_MAX_DIM = 768;
 const FUNCTION_BUDGET_MS = 360_000;
-const GEMINI_ATTEMPT_TIMEOUT_MS = 120_000;
+const GEMINI_ATTEMPT_TIMEOUT_MS = 75_000;
 const GEMINI_RETRY_DELAYS_MS = [1_500];
 const MAX_USER_REFS = 1;
 
@@ -139,13 +138,25 @@ function friendlyGeminiError(status: number, message: string, parsedStatus?: str
   return `Image edit failed [${status}]: ${message.slice(0, 220)}`;
 }
 
+function isFollowUpEditBody(body: Record<string, unknown>) {
+  return (
+    typeof body.editImageDataUrl === "string" &&
+    body.editImageDataUrl.length > 0 &&
+    typeof body.prompt === "string" &&
+    body.prompt.trim().length > 0
+  );
+}
+
+function getModelOrder(body: Record<string, unknown>) {
+  if (isFollowUpEditBody(body)) {
+    return ["gemini-2.5-flash-image", "gemini-3.1-flash-image-preview"];
+  }
+  return GEMINI_MODELS;
+}
+
 async function buildGeminiParts(body: Record<string, unknown>) {
   const { templateUrl, userImages, prompt, editImageDataUrl } = body;
-  const isFollowUpEdit =
-    typeof editImageDataUrl === "string" &&
-    editImageDataUrl.length > 0 &&
-    typeof prompt === "string" &&
-    prompt.trim().length > 0;
+  const isFollowUpEdit = isFollowUpEditBody(body);
   const outputInstruction =
     "You must return exactly one generated image. Do not answer with text only.";
 
@@ -239,13 +250,14 @@ async function callGemini(
   imageCount: number,
   startedAt: number,
   attempt: string,
+  modelOrder = GEMINI_MODELS,
 ) {
   let lastError:
     | { status: number; message: string; parsedStatus?: string; model?: string }
     | undefined;
   let lastTextOnlyJson: Record<string, unknown> | undefined;
 
-  for (let i = 0; i < GEMINI_MODELS.length; i++) {
+  for (let i = 0; i < modelOrder.length; i++) {
     const remainingMs = FUNCTION_BUDGET_MS - (Date.now() - startedAt);
     if (remainingMs < 20_000) {
       return {
@@ -255,9 +267,9 @@ async function callGemini(
       };
     }
 
-    const model = GEMINI_MODELS[i];
+    const model = modelOrder[i];
     const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
-    const attemptLabel = `${attempt}-${i + 1}/${GEMINI_MODELS.length}`;
+    const attemptLabel = `${attempt}-${i + 1}/${modelOrder.length}`;
     console.log("[generate-from-template] calling", model, attemptLabel, "images:", imageCount);
 
     const controller = new AbortController();
@@ -283,6 +295,16 @@ async function callGemini(
       clearTimeout(timeoutId);
       const aborted = e instanceof Error && e.name === "AbortError";
       console.error("Gemini request failed", e);
+      lastError = {
+        status: aborted ? 504 : 500,
+        message: e instanceof Error ? e.message : String(e),
+        parsedStatus: aborted ? "TIMEOUT" : undefined,
+        model,
+      };
+      if (i < modelOrder.length - 1 && FUNCTION_BUDGET_MS - (Date.now() - startedAt) > 35_000) {
+        console.warn("[generate-from-template] retrying next model after request failure", model);
+        continue;
+      }
       return {
         ok: false,
         error: aborted
@@ -304,7 +326,7 @@ async function callGemini(
         model,
         extractTextResponse(json),
       );
-      if (i < GEMINI_MODELS.length - 1) continue;
+      if (i < modelOrder.length - 1) continue;
       return { ok: true, json, modelText: extractTextResponse(json) };
     }
 
@@ -318,7 +340,7 @@ async function callGemini(
       model,
     };
 
-    if (i < GEMINI_MODELS.length - 1) {
+    if (i < modelOrder.length - 1) {
       const retryable =
         isRetryableGeminiStatus(aiRes.status, parsed.status) ||
         aiRes.status === 400;
@@ -384,9 +406,10 @@ async function generateImage(body: Record<string, unknown>, geminiKey: string) {
   const startedAt = Date.now();
   const t0 = Date.now();
   const { parts, imageCount } = await buildGeminiParts(body);
+  const modelOrder = getModelOrder(body);
   console.log("[generate-from-template] image prep ms:", Date.now() - t0);
 
-  let result = await callGemini(geminiKey, parts, imageCount, startedAt, "primary");
+  let result = await callGemini(geminiKey, parts, imageCount, startedAt, "primary", modelOrder);
   if (!result.ok) return { error: result.error, errorCode: result.errorCode, fallback: true };
 
   let imageDataUrl = extractImageDataUrl(result.json);
@@ -401,7 +424,14 @@ async function generateImage(body: Record<string, unknown>, geminiKey: string) {
       "[generate-from-template] retrying with visual fallback after no image",
       result.modelText || "",
     );
-    result = await callGemini(geminiKey, retryParts, imageCount, startedAt, "soft-visual-reference");
+    result = await callGemini(
+      geminiKey,
+      retryParts,
+      imageCount,
+      startedAt,
+      "soft-visual-reference",
+      modelOrder,
+    );
     if (!result.ok) return { error: result.error, errorCode: result.errorCode, fallback: true };
     imageDataUrl = extractImageDataUrl(result.json);
   }

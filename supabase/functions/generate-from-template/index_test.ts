@@ -221,3 +221,76 @@ Deno.test("tries another image model when the first response has no image", asyn
     envStub.restore();
   }
 });
+
+Deno.test("tries the next follow-up edit model after a request timeout", async () => {
+  const originalEnvGet = Deno.env.get;
+  const originalFetch = globalThis.fetch;
+  const modelUrls: string[] = [];
+
+  const envStub = stub(Deno.env, "get", (key: string) => {
+    if (key === "GOOGLE_GEMINI_API_KEY") return "test-key";
+    return originalEnvGet.call(Deno.env, key);
+  });
+
+  const fetchStub = stub(globalThis, "fetch", async (input: string | Request | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+
+    if (url.includes("generativelanguage.googleapis.com")) {
+      modelUrls.push(url);
+      if (modelUrls.length === 1) {
+        throw new DOMException("The operation was aborted.", "AbortError");
+      }
+
+      return new Response(
+        JSON.stringify({
+          candidates: [
+            {
+              content: {
+                parts: [
+                  {
+                    inline_data: {
+                      mime_type: "image/png",
+                      data: "iVBORw0KGgo=",
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    return originalFetch(input, init);
+  });
+
+  try {
+    const response = await handleGenerateFromTemplateRequest(
+      new Request("http://localhost/generate-from-template", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          templateUrl: "https://example.com/template.png",
+          userImages: ["data:image/png;base64,iVBORw0KGgo="],
+          editImageDataUrl: "data:image/png;base64,iVBORw0KGgo=",
+          prompt: "change the girl position",
+        }),
+      }),
+    );
+
+    const body = await response.json();
+
+    assertEquals(response.status, 200);
+    assertEquals(modelUrls.length, 2);
+    assertStringIncludes(modelUrls[0], "gemini-2.5-flash-image");
+    assertStringIncludes(modelUrls[1], "gemini-3.1-flash-image-preview");
+    assert(body.imageDataUrl);
+  } finally {
+    fetchStub.restore();
+    envStub.restore();
+  }
+});
