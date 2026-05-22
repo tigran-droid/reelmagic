@@ -123,9 +123,11 @@ Deno.test("keeps identity replacement rules when a template prompt is provided",
 
     assertEquals(response.status, 200);
     assert(body.imageDataUrl);
-    assertEquals(parts.length, 3);
+    assertEquals(parts.length, 5);
     assertStringIncludes(instruction, "fully replace it with the user's identity");
     assertStringIncludes(instruction, "Make it cinematic and premium.");
+    assertStringIncludes(parts[1]?.text ?? "", "TEMPLATE SCENE ONLY");
+    assertStringIncludes(parts[3]?.text ?? "", "USER IDENTITY REFERENCE");
   } finally {
     fetchStub.restore();
     envStub.restore();

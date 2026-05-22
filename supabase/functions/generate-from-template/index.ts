@@ -13,9 +13,9 @@ const GEMINI_MODELS = [
   "gemini-2.5-flash-image",
   "gemini-3.1-flash-image-preview",
 ];
-const MAX_IMAGE_BYTES = 320_000;
+const MAX_IMAGE_BYTES = 480_000;
 const TEMPLATE_MAX_DIM = 768;
-const USER_REF_MAX_DIM = 512;
+const USER_REF_MAX_DIM = 768;
 const EDIT_IMAGE_MAX_DIM = 768;
 const FUNCTION_BUDGET_MS = 360_000;
 const GEMINI_ATTEMPT_TIMEOUT_MS = 120_000;
@@ -140,9 +140,11 @@ async function buildGeminiParts(body: Record<string, unknown>) {
 
   let instruction = "";
   let allImages: string[] = [];
+  let imageLabels: string[] = [];
 
   if (isFollowUpEdit) {
     allImages = [await normalizeDataUrl(editImageDataUrl, EDIT_IMAGE_MAX_DIM)];
+    imageLabels = ["CURRENT CHAT IMAGE TO EDIT. This is the exact image that must be edited."];
     instruction = [
       "You will receive one already generated chat image.",
       "Apply ONLY the user's requested edit to this exact image.",
@@ -166,14 +168,25 @@ async function buildGeminiParts(body: Record<string, unknown>) {
       ),
     ]);
     allImages = [templateDataUrl, ...normalizedUserImages];
+    imageLabels = [
+      "IMAGE 1 - TEMPLATE SCENE ONLY. Use only the pose, composition, body placement, clothing, background, lighting, camera angle and style. Do NOT use this person's face, hair, skin tone, age or identity.",
+      ...normalizedUserImages.map(
+        (_, index) =>
+          `IMAGE ${index + 2} - USER IDENTITY REFERENCE. The final person must look like this user: face shape, eyes, nose, mouth, skin tone, age, hair color, hair texture and recognizable identity.`,
+      ),
+    ];
 
     const BASE_TEMPLATE_INSTRUCTION = [
       "You will receive multiple images.",
       "Image 1 is the TEMPLATE scene; keep its composition, framing, pose, lighting, color grading, wardrobe, background and overall style exactly as shown.",
       "The remaining images are REFERENCE photos of the USER; use them ONLY as the identity source.",
       "Recreate the TEMPLATE scene so that the main subject IS the USER from the reference photos.",
+      "The final image must be clearly recognizable as the USER from Image 2, not as the person from the template.",
+      "Treat the template person as a pose/scene mannequin only, not as a character to keep.",
       "Do NOT keep the template person's face; fully replace it with the user's identity from the reference images.",
+      "Do NOT generate a new similar-looking person. Preserve the user's face shape, eyes, nose, mouth, skin tone, age, hair color and hair texture as much as the scene allows.",
       "Do NOT copy the user's clothing, background, pose or lighting from the reference photos; those come ONLY from the template.",
+      "If any app note conflicts with the identity replacement rules, the identity replacement rules win.",
       "Preserve the user's exact facial identity and likeness.",
       "Keep the result photorealistic, sharp and consistent with the template's camera and lens.",
       "Return exactly ONE final edited image.",
@@ -196,7 +209,10 @@ async function buildGeminiParts(body: Record<string, unknown>) {
   }
 
   const parts: Array<Record<string, unknown>> = [{ text: instruction }];
-  for (const url of allImages) {
+  for (let i = 0; i < allImages.length; i++) {
+    const url = allImages[i];
+    const label = imageLabels[i];
+    if (label) parts.push({ text: label });
     const m = url.match(/^data:([^;]+);base64,(.+)$/);
     const mime = m?.[1] ?? "image/png";
     const data = m?.[2] ?? "";
