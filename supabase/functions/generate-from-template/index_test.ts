@@ -138,7 +138,7 @@ Deno.test("keeps identity replacement rules when a template prompt is provided",
   }
 });
 
-Deno.test("tries another image model when the first response has no image", async () => {
+Deno.test("does not call the provider twice when the response has no image", async () => {
   const originalEnvGet = Deno.env.get;
   const originalFetch = globalThis.fetch;
   let geminiCalls = 0;
@@ -160,34 +160,9 @@ Deno.test("tries another image model when the first response has no image", asyn
 
     if (url.includes("generativelanguage.googleapis.com")) {
       geminiCalls += 1;
-      if (geminiCalls === 1) {
-        return new Response(
-          JSON.stringify({
-            candidates: [{ content: { parts: [{ text: "I cannot return an image." }] } }],
-          }),
-          {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          },
-        );
-      }
-
       return new Response(
         JSON.stringify({
-          candidates: [
-            {
-              content: {
-                parts: [
-                  {
-                    inline_data: {
-                      mime_type: "image/png",
-                      data: "iVBORw0KGgo=",
-                    },
-                  },
-                ],
-              },
-            },
-          ],
+          candidates: [{ content: { parts: [{ text: "I cannot return an image." }] } }],
         }),
         {
           status: 200,
@@ -214,15 +189,16 @@ Deno.test("tries another image model when the first response has no image", asyn
     const body = await response.json();
 
     assertEquals(response.status, 200);
-    assertEquals(geminiCalls, 2);
-    assert(body.imageDataUrl);
+    assertEquals(geminiCalls, 1);
+    assertEquals(body.fallback, true);
+    assertEquals(body.errorCode, "AI_IMAGE_EDIT_NO_OUTPUT");
   } finally {
     fetchStub.restore();
     envStub.restore();
   }
 });
 
-Deno.test("tries the next follow-up edit model after a request timeout", async () => {
+Deno.test("uses one provider call for follow-up edits", async () => {
   const originalEnvGet = Deno.env.get;
   const originalFetch = globalThis.fetch;
   const modelUrls: string[] = [];
@@ -237,10 +213,6 @@ Deno.test("tries the next follow-up edit model after a request timeout", async (
 
     if (url.includes("generativelanguage.googleapis.com")) {
       modelUrls.push(url);
-      if (modelUrls.length === 1) {
-        throw new DOMException("The operation was aborted.", "AbortError");
-      }
-
       return new Response(
         JSON.stringify({
           candidates: [
@@ -285,9 +257,8 @@ Deno.test("tries the next follow-up edit model after a request timeout", async (
     const body = await response.json();
 
     assertEquals(response.status, 200);
-    assertEquals(modelUrls.length, 2);
+    assertEquals(modelUrls.length, 1);
     assertStringIncludes(modelUrls[0], "gemini-2.5-flash-image");
-    assertStringIncludes(modelUrls[1], "gemini-3.1-flash-image-preview");
     assert(body.imageDataUrl);
   } finally {
     fetchStub.restore();
