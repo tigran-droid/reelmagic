@@ -199,27 +199,25 @@ async function buildGeminiParts(body: Record<string, unknown>) {
         normalizeDataUrl(img, USER_REF_MAX_DIM),
       ),
     ]);
-    allImages = [templateDataUrl, ...normalizedUserImages];
+    allImages = [...normalizedUserImages, templateDataUrl];
     imageLabels = [
-      "IMAGE 1 - TEMPLATE SCENE ONLY. Use only the pose, composition, body placement, clothing, background, lighting, camera angle and style. Do NOT use this person's face, hair, skin tone, age or identity.",
       ...normalizedUserImages.map(
         (_, index) =>
-          `IMAGE ${index + 2} - USER IDENTITY REFERENCE. The final person must look like this user: face shape, eyes, nose, mouth, skin tone, age, hair color, hair texture and recognizable identity.`,
+          `IMAGE ${index + 1} - USER APPEARANCE REFERENCE. The final person must look like this uploaded user: face shape, eyes, nose, mouth, skin tone, age, hair color, hair texture and recognizable appearance.`,
       ),
+      `IMAGE ${normalizedUserImages.length + 1} - TEMPLATE SCENE ONLY. Use only the pose, composition, body placement, clothing, background, lighting, camera angle and style. Do NOT use this person's face, hair, skin tone, age or identity.`,
     ];
 
     const BASE_TEMPLATE_INSTRUCTION = [
       "You will receive multiple images.",
-      "Image 1 is the TEMPLATE scene; keep its composition, framing, pose, lighting, color grading, wardrobe, background and overall style exactly as shown.",
-      "The remaining images are REFERENCE photos of the USER; use them ONLY as the identity source.",
-      "Recreate the TEMPLATE scene so that the main subject IS the USER from the reference photos.",
-      "The final image must be clearly recognizable as the USER from Image 2, not as the person from the template.",
-      "Treat the template person as a pose/scene mannequin only, not as a character to keep.",
-      "Do NOT keep the template person's face; fully replace it with the user's identity from the reference images.",
-      "Do NOT generate a new similar-looking person. Preserve the user's face shape, eyes, nose, mouth, skin tone, age, hair color and hair texture as much as the scene allows.",
-      "Do NOT copy the user's clothing, background, pose or lighting from the reference photos; those come ONLY from the template.",
-      "If any app note conflicts with the identity replacement rules, the identity replacement rules win.",
-      "Preserve the user's exact facial identity and likeness.",
+      "The FIRST attached image is the USER appearance reference and has priority for the main subject's face, hair, skin tone, age and recognizable look.",
+      "The SECOND attached image is the TEMPLATE scene; use it for composition, framing, pose, lighting, color grading, wardrobe, background and overall style.",
+      "Create the TEMPLATE scene with the main subject looking like the USER from Image 1.",
+      "Do NOT keep the template person's face, hair, skin tone, age or identity.",
+      "If the template person's appearance conflicts with the user photo, ignore the template person's appearance completely.",
+      "Treat the template person as a pose/scene mannequin only.",
+      "Do NOT copy the user's clothing, background, pose or lighting from Image 1; those come from Image 2.",
+      "If any app note conflicts with these image roles, Image 1 remains the person and Image 2 remains the scene.",
       "Keep the result photorealistic, sharp and consistent with the template's camera and lens.",
       "Return exactly ONE final edited image.",
     ].join("\n");

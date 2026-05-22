@@ -58,7 +58,12 @@ Deno.test("keeps identity replacement rules when a template prompt is provided",
   const originalFetch = globalThis.fetch;
   let geminiRequestBody:
     | {
-        contents?: Array<{ parts?: Array<{ text?: string }> }>;
+        contents?: Array<{
+          parts?: Array<{
+            text?: string;
+            inline_data?: { data?: string };
+          }>;
+        }>;
         generationConfig?: { responseModalities?: string[] };
       }
     | undefined;
@@ -116,7 +121,7 @@ Deno.test("keeps identity replacement rules when a template prompt is provided",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           templateUrl: "https://example.com/template.png",
-          userImages: ["data:image/png;base64,iVBORw0KGgo="],
+          userImages: ["data:image/png;base64,dXNlci1waG90bw=="],
           prompt: "Make it cinematic and premium.",
         }),
       }),
@@ -129,10 +134,13 @@ Deno.test("keeps identity replacement rules when a template prompt is provided",
     assertEquals(response.status, 200);
     assert(body.imageDataUrl);
     assertEquals(parts.length, 5);
-    assertStringIncludes(instruction, "fully replace it with the user's identity");
+    assertStringIncludes(instruction, "FIRST attached image is the USER appearance reference");
+    assertStringIncludes(instruction, "SECOND attached image is the TEMPLATE scene");
     assertStringIncludes(instruction, "Make it cinematic and premium.");
-    assertStringIncludes(parts[1]?.text ?? "", "TEMPLATE SCENE ONLY");
-    assertStringIncludes(parts[3]?.text ?? "", "USER IDENTITY REFERENCE");
+    assertStringIncludes(parts[1]?.text ?? "", "USER APPEARANCE REFERENCE");
+    assertEquals(parts[2]?.inline_data?.data, "dXNlci1waG90bw==");
+    assertStringIncludes(parts[3]?.text ?? "", "TEMPLATE SCENE ONLY");
+    assertEquals(parts[4]?.inline_data?.data, "iVBORw==");
     assertStringIncludes(geminiUrl, "gemini-3.1-flash-image-preview");
     assertEquals(geminiRequestBody?.generationConfig?.responseModalities, ["TEXT", "IMAGE"]);
   } finally {
