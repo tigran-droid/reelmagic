@@ -56,8 +56,6 @@ const USER_IMAGES_KEY = "create:userImages";
 const AUTORUN_KEY = "create:autoRun";
 const UPLOAD_IMAGE_MAX_EDGE = 1280;
 const UPLOAD_IMAGE_QUALITY = 0.82;
-const FOLLOW_UP_EDIT_MARKER =
-  "Edit the already generated image using this request:";
 const LEGACY_DEFAULT_PROMPT_MARKER = "You will receive multiple images.";
 
 function uid() {
@@ -115,6 +113,16 @@ function getCustomPrompt(prompt?: string | null) {
   return trimmed;
 }
 
+function getLatestResultImage(messages: ChatMessage[]) {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i];
+    if (msg.role === "assistant" && msg.kind === "result") {
+      return msg.imageDataUrl;
+    }
+  }
+  return null;
+}
+
 function CreatePage() {
   const navigate = useNavigate();
   const [reel, setReel] = useState<DraftReel | null>(null);
@@ -125,7 +133,6 @@ function CreatePage() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const moreInputRef = useRef<HTMLInputElement>(null);
   const didAutoRun = useRef(false);
-  const latestGeneratedImage = useRef<string | null>(null);
 
   // Hydrate from sessionStorage
   useEffect(() => {
@@ -163,10 +170,8 @@ function CreatePage() {
     setBusy(true);
     const statusId = uid();
     const trimmedPrompt = promptText?.trim();
-    const editImageDataUrl = trimmedPrompt ? latestGeneratedImage.current : null;
-    const customPrompt = editImageDataUrl
-      ? `${FOLLOW_UP_EDIT_MARKER} ${trimmedPrompt}`
-      : trimmedPrompt || getCustomPrompt(reel.prompt);
+    const editImageDataUrl = trimmedPrompt ? getLatestResultImage(messages) : null;
+    const customPrompt = trimmedPrompt || getCustomPrompt(reel.prompt);
     setMessages((m) => [
       ...m,
       {
@@ -203,7 +208,6 @@ function CreatePage() {
       if (data?.fallback && data?.error) throw new Error(data.error);
       if (data?.error) throw new Error(data.error);
       if (!data?.imageDataUrl) throw new Error("No image returned");
-      latestGeneratedImage.current = data.imageDataUrl;
       setMessages((m) =>
         m
           .filter((x) => x.id !== statusId)
@@ -277,7 +281,6 @@ function CreatePage() {
     e.target.value = "";
     if (files.length === 0) return;
     const urls = await Promise.all(files.map(optimizeImageForUpload));
-    latestGeneratedImage.current = null;
     setUserImages(urls);
     sessionStorage.setItem(USER_IMAGES_KEY, JSON.stringify(urls));
     setMessages((m) => [
