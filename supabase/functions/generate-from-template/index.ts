@@ -8,8 +8,10 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const GEMINI_MODEL = "gemini-3.1-flash-image-preview";
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+const GEMINI_MODELS = [
+  "gemini-2.5-flash-image",
+  "gemini-3.1-flash-image-preview",
+];
 // Keep template at higher quality (it defines the final scene),
 // downscale identity refs more aggressively — they only need to convey face.
 const MAX_IMAGE_BYTES = 320_000;
@@ -19,8 +21,7 @@ const EDIT_IMAGE_MAX_DIM = 768;
 // Lovable/Supabase cuts idle requests at about 150s, so stay below it.
 const FUNCTION_BUDGET_MS = 135_000;
 const GEMINI_ATTEMPT_TIMEOUT_MS = 58_000;
-const GEMINI_MAX_ATTEMPTS = 2;
-const GEMINI_RETRY_DELAYS_MS = [2_000];
+const GEMINI_RETRY_DELAYS_MS = [1_500];
 // Hard cap on identity refs sent to the model. More images = much slower
 // inference with negligible quality gain past 2 good shots.
 const MAX_USER_REFS = 1;
@@ -153,11 +154,13 @@ export async function handleGenerateFromTemplateRequest(req: Request) {
     if (isFollowUpEdit) {
       allImages = [await normalizeDataUrl(editImageDataUrl, EDIT_IMAGE_MAX_DIM)];
       instruction = [
-        "You will receive one already generated image.",
-        "Edit ONLY what the user asks for.",
-        "Preserve the same person, face, pose, background, camera angle, lighting, and image quality.",
+        "You will receive one already generated chat image.",
+        "Apply ONLY the user's requested edit to this exact image.",
+        "Do not recreate the scene from scratch.",
+        "Do not change the face, identity, hair, pose, background, camera angle, lighting, composition, or text unless the user explicitly asks.",
         `User edit request: ${prompt.trim()}`,
-        outputInstruction,
+        "Return the full edited image.",
+        "No explanation.",
       ].join("\n");
     } else {
       if (!templateUrl) throw new Error("templateUrl required");
@@ -208,10 +211,10 @@ export async function handleGenerateFromTemplateRequest(req: Request) {
 
     async function callGemini(requestParts: Array<Record<string, unknown>>, attempt: string) {
       let lastError:
-        | { status: number; message: string; parsedStatus?: string }
+        | { status: number; message: string; parsedStatus?: string; model?: string }
         | undefined;
 
-      for (let i = 0; i < GEMINI_MAX_ATTEMPTS; i++) {
+      for (let i = 0; i < GEMINI_MODELS.length; i++) {
         const remainingMs = FUNCTION_BUDGET_MS - (Date.now() - startedAt);
         if (remainingMs < 20_000) {
           return {
@@ -224,8 +227,10 @@ export async function handleGenerateFromTemplateRequest(req: Request) {
           };
         }
 
-        const attemptLabel = `${attempt}-${i + 1}/${GEMINI_MAX_ATTEMPTS}`;
-        console.log("[generate-from-template] calling", GEMINI_MODEL, attemptLabel, "images:", allImages.length);
+        const model = GEMINI_MODELS[i];
+        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+        const attemptLabel = `${attempt}-${i + 1}/${GEMINI_MODELS.length}`;
+        console.log("[generate-from-template] calling", model, attemptLabel, "images:", allImages.length);
 
         const controller = new AbortController();
         const timeoutId = setTimeout(
@@ -235,7 +240,7 @@ export async function handleGenerateFromTemplateRequest(req: Request) {
         const tFetch = Date.now();
         let aiRes: Response;
         try {
-          aiRes = await fetch(`${GEMINI_URL}?key=${geminiKey}`, {
+          aiRes = await fetch(`${geminiUrl}?key=${geminiKey}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -271,10 +276,11 @@ export async function handleGenerateFromTemplateRequest(req: Request) {
           status: aiRes.status,
           message: parsed.message,
           parsedStatus: parsed.status,
+          model,
         };
 
         if (
-          i < GEMINI_MAX_ATTEMPTS - 1 &&
+          i < GEMINI_MODELS.length - 1 &&
           isRetryableGeminiStatus(aiRes.status, parsed.status) &&
           FUNCTION_BUDGET_MS - (Date.now() - startedAt) > 35_000
         ) {
