@@ -123,6 +123,10 @@ function getLatestResultImage(messages: ChatMessage[]) {
   return null;
 }
 
+function wait(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
 function CreatePage() {
   const navigate = useNavigate();
   const [reel, setReel] = useState<DraftReel | null>(null);
@@ -190,16 +194,23 @@ function CreatePage() {
     try {
       const data = await invokeEdgeFunction<
         {
+          action: "start";
           templateUrl: string;
           userImages: string[];
           prompt?: string;
           editImageDataUrl?: string;
         },
-        { imageDataUrl?: string; error?: string; fallback?: boolean }
+        {
+          operationName?: string;
+          imageDataUrl?: string;
+          error?: string;
+          fallback?: boolean;
+        }
       >(
         "generate-from-template",
         {
           body: {
+            action: "start",
             templateUrl: requestTemplateUrl,
             userImages: requestUserImages,
             ...(customPrompt ? { prompt: customPrompt } : {}),
@@ -209,7 +220,35 @@ function CreatePage() {
       );
       if (data?.fallback && data?.error) throw new Error(data.error);
       if (data?.error) throw new Error(data.error);
-      if (!data?.imageDataUrl) throw new Error("No image returned");
+
+      let imageDataUrl = data.imageDataUrl;
+      if (!imageDataUrl && data.operationName) {
+        const maxMs = 6 * 60 * 1000;
+        const startedAt = Date.now();
+        while (Date.now() - startedAt < maxMs) {
+          await wait(3500);
+          const pollData = await invokeEdgeFunction<
+            { action: "poll"; operationName: string },
+            {
+              done?: boolean;
+              imageDataUrl?: string;
+              error?: string;
+              fallback?: boolean;
+            }
+          >("generate-from-template", {
+            body: { action: "poll", operationName: data.operationName },
+          });
+
+          if (!pollData.done) continue;
+          if (pollData.error) throw new Error(pollData.error);
+          imageDataUrl = pollData.imageDataUrl;
+          break;
+        }
+      }
+
+      if (!imageDataUrl) {
+        throw new Error("Image generation is still processing. Please try again in a moment.");
+      }
       setMessages((m) =>
         m
           .filter((x) => x.id !== statusId)
@@ -217,7 +256,7 @@ function CreatePage() {
             id: uid(),
             role: "assistant",
             kind: "result",
-            imageDataUrl: data.imageDataUrl,
+            imageDataUrl,
           }),
       );
     } catch (e) {

@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -12,18 +13,13 @@ const GEMINI_MODELS = [
   "gemini-2.5-flash-image",
   "gemini-3.1-flash-image-preview",
 ];
-// Keep template at higher quality (it defines the final scene),
-// downscale identity refs more aggressively — they only need to convey face.
 const MAX_IMAGE_BYTES = 320_000;
 const TEMPLATE_MAX_DIM = 768;
 const USER_REF_MAX_DIM = 512;
 const EDIT_IMAGE_MAX_DIM = 768;
-// Lovable/Supabase cuts idle requests at about 150s, so stay below it.
-const FUNCTION_BUDGET_MS = 135_000;
-const GEMINI_ATTEMPT_TIMEOUT_MS = 58_000;
+const FUNCTION_BUDGET_MS = 360_000;
+const GEMINI_ATTEMPT_TIMEOUT_MS = 120_000;
 const GEMINI_RETRY_DELAYS_MS = [1_500];
-// Hard cap on identity refs sent to the model. More images = much slower
-// inference with negligible quality gain past 2 good shots.
 const MAX_USER_REFS = 1;
 
 function jsonResponse(body: Record<string, unknown>, status = 200) {
@@ -31,6 +27,13 @@ function jsonResponse(body: Record<string, unknown>, status = 200) {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
+}
+
+function getSupabaseAdmin() {
+  return createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  );
 }
 
 function extractImageDataUrl(json: Record<string, unknown>): string | undefined {
@@ -125,8 +128,250 @@ function friendlyGeminiError(status: number, message: string, parsedStatus?: str
   return `Image edit failed [${status}]: ${message.slice(0, 220)}`;
 }
 
-export async function handleGenerateFromTemplateRequest(req: Request) {
+async function buildGeminiParts(body: Record<string, unknown>) {
+  const { templateUrl, userImages, prompt, editImageDataUrl } = body;
+  const isFollowUpEdit =
+    typeof editImageDataUrl === "string" &&
+    editImageDataUrl.length > 0 &&
+    typeof prompt === "string" &&
+    prompt.trim().length > 0;
+  const outputInstruction =
+    "You must return exactly one generated image. Do not answer with text only.";
+
+  let instruction = "";
+  let allImages: string[] = [];
+
+  if (isFollowUpEdit) {
+    allImages = [await normalizeDataUrl(editImageDataUrl, EDIT_IMAGE_MAX_DIM)];
+    instruction = [
+      "You will receive one already generated chat image.",
+      "Apply ONLY the user's requested edit to this exact image.",
+      "Do not recreate the scene from scratch.",
+      "Do not change the face, identity, hair, pose, background, camera angle, lighting, composition, or text unless the user explicitly asks.",
+      `User edit request: ${prompt.trim()}`,
+      "Return the full edited image.",
+      "No explanation.",
+    ].join("\n");
+  } else {
+    if (!templateUrl) throw new Error("templateUrl required");
+    if (!Array.isArray(userImages) || userImages.length === 0) {
+      throw new Error("At least one user photo is required");
+    }
+
+    const trimmedUserImages = userImages.slice(0, MAX_USER_REFS);
+    const [templateDataUrl, ...normalizedUserImages] = await Promise.all([
+      urlToDataUrl(String(templateUrl)).then((u) => normalizeDataUrl(u, TEMPLATE_MAX_DIM)),
+      ...trimmedUserImages.map((img: string) =>
+        normalizeDataUrl(img, USER_REF_MAX_DIM),
+      ),
+    ]);
+    allImages = [templateDataUrl, ...normalizedUserImages];
+
+    const DEFAULT_INSTRUCTION = [
+      "You will receive multiple images.",
+      "Image 1 is the TEMPLATE scene; keep its composition, framing, pose, lighting, color grading, wardrobe, background and overall style exactly as shown.",
+      "The remaining images are REFERENCE photos of the USER; use them ONLY as the identity source.",
+      "Recreate the TEMPLATE scene so that the main subject IS the USER from the reference photos.",
+      "Do NOT keep the template person's face; fully replace it with the user's identity from the reference images.",
+      "Do NOT copy the user's clothing, background, pose or lighting from the reference photos; those come ONLY from the template.",
+      "Preserve the user's exact facial identity and likeness.",
+      "Keep the result photorealistic, sharp and consistent with the template's camera and lens.",
+      "Return exactly ONE final edited image.",
+    ].join("\n");
+    instruction = typeof prompt === "string" && prompt.trim().length > 0
+      ? `${prompt.trim()}\n\n${outputInstruction}`
+      : `${DEFAULT_INSTRUCTION}\n${outputInstruction}`;
+  }
+
+  const parts: Array<Record<string, unknown>> = [{ text: instruction }];
+  for (const url of allImages) {
+    const m = url.match(/^data:([^;]+);base64,(.+)$/);
+    const mime = m?.[1] ?? "image/png";
+    const data = m?.[2] ?? "";
+    parts.push({ inline_data: { mime_type: mime, data } });
+  }
+
+  return { parts, instruction, imageCount: allImages.length };
+}
+
+async function callGemini(
+  geminiKey: string,
+  requestParts: Array<Record<string, unknown>>,
+  imageCount: number,
+  startedAt: number,
+  attempt: string,
+) {
+  let lastError:
+    | { status: number; message: string; parsedStatus?: string; model?: string }
+    | undefined;
+
+  for (let i = 0; i < GEMINI_MODELS.length; i++) {
+    const remainingMs = FUNCTION_BUDGET_MS - (Date.now() - startedAt);
+    if (remainingMs < 20_000) {
+      return {
+        ok: false,
+        error: "Image generation is taking longer than usual. Please wait a little and try again.",
+        errorCode: "AI_IMAGE_TIMEOUT",
+      };
+    }
+
+    const model = GEMINI_MODELS[i];
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+    const attemptLabel = `${attempt}-${i + 1}/${GEMINI_MODELS.length}`;
+    console.log("[generate-from-template] calling", model, attemptLabel, "images:", imageCount);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(
+      () => controller.abort(),
+      Math.min(GEMINI_ATTEMPT_TIMEOUT_MS, Math.max(10_000, remainingMs - 10_000)),
+    );
+    const tFetch = Date.now();
+    let aiRes: Response;
+    try {
+      aiRes = await fetch(`${geminiUrl}?key=${geminiKey}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: requestParts }],
+          generationConfig: { responseModalities: ["IMAGE", "TEXT"] },
+        }),
+        signal: controller.signal,
+      });
+    } catch (e) {
+      clearTimeout(timeoutId);
+      const aborted = e instanceof Error && e.name === "AbortError";
+      console.error("Gemini request failed", e);
+      return {
+        ok: false,
+        error: aborted
+          ? "Image generation is taking longer than usual. Please wait a little and try again."
+          : `Image generation request failed: ${e instanceof Error ? e.message : String(e)}`,
+        errorCode: aborted ? "AI_IMAGE_TIMEOUT" : "AI_IMAGE_EDIT_FAILED",
+      };
+    }
+    clearTimeout(timeoutId);
+    console.log("[generate-from-template] gemini ms:", Date.now() - tFetch);
+
+    if (aiRes.ok) return { ok: true, json: await aiRes.json() };
+
+    const text = await aiRes.text();
+    const parsed = parseGeminiError(text);
+    console.error("Gemini image error", aiRes.status, parsed.message);
+    lastError = {
+      status: aiRes.status,
+      message: parsed.message,
+      parsedStatus: parsed.status,
+      model,
+    };
+
+    if (
+      i < GEMINI_MODELS.length - 1 &&
+      isRetryableGeminiStatus(aiRes.status, parsed.status) &&
+      FUNCTION_BUDGET_MS - (Date.now() - startedAt) > 35_000
+    ) {
+      await sleep(GEMINI_RETRY_DELAYS_MS[i] ?? 1_500);
+      continue;
+    }
+
+    break;
+  }
+
+  const status = lastError?.status ?? 500;
+  const parsedStatus = lastError?.parsedStatus;
+  return {
+    ok: false,
+    error: friendlyGeminiError(status, lastError?.message ?? "Unknown image generation error", parsedStatus),
+    errorCode:
+      status === 429 || parsedStatus === "RESOURCE_EXHAUSTED"
+        ? "RATE_LIMITED"
+        : status === 402
+          ? "PAYMENT_REQUIRED"
+          : status === 503 || parsedStatus === "UNAVAILABLE"
+            ? "AI_IMAGE_MODEL_BUSY"
+            : "AI_IMAGE_EDIT_FAILED",
+  };
+}
+
+async function generateImage(body: Record<string, unknown>, geminiKey: string) {
   const startedAt = Date.now();
+  const t0 = Date.now();
+  const { parts, instruction, imageCount } = await buildGeminiParts(body);
+  console.log("[generate-from-template] image prep ms:", Date.now() - t0);
+
+  let result = await callGemini(geminiKey, parts, imageCount, startedAt, "primary");
+  if (!result.ok) return { error: result.error, errorCode: result.errorCode, fallback: true };
+
+  let imageDataUrl = extractImageDataUrl(result.json);
+  if (!imageDataUrl) {
+    const retryParts = [
+      {
+        text: `${instruction}\n\nRetry because the previous response did not include image data. Generate the edited image now. No explanation, no text-only answer.`,
+      },
+      ...parts.slice(1),
+    ];
+    result = await callGemini(geminiKey, retryParts, imageCount, startedAt, "retry-image-only");
+    if (!result.ok) return { error: result.error, errorCode: result.errorCode, fallback: true };
+    imageDataUrl = extractImageDataUrl(result.json);
+  }
+
+  if (!imageDataUrl) {
+    return {
+      error: "The image editor did not return an image. Try a clearer photo or a shorter instruction.",
+      errorCode: "AI_IMAGE_EDIT_NO_OUTPUT",
+      fallback: true,
+    };
+  }
+
+  if (imageDataUrl.startsWith("http")) {
+    try {
+      imageDataUrl = await urlToDataUrl(imageDataUrl);
+    } catch (e) {
+      console.error("Failed to inline AI image", e);
+    }
+  }
+
+  return { imageDataUrl };
+}
+
+async function updateJob(jobId: string, patch: Record<string, unknown>) {
+  const supabase = getSupabaseAdmin();
+  const { error } = await supabase
+    .from("image_generation_jobs")
+    .update({ ...patch, updated_at: new Date().toISOString() })
+    .eq("id", jobId);
+  if (error) console.error("[generate-from-template] job update failed", error);
+}
+
+async function processImageJob(jobId: string, body: Record<string, unknown>, geminiKey: string) {
+  try {
+    const result = await generateImage(body, geminiKey);
+    if (result.imageDataUrl) {
+      await updateJob(jobId, {
+        status: "completed",
+        image_data_url: result.imageDataUrl,
+        completed_at: new Date().toISOString(),
+      });
+      return;
+    }
+
+    await updateJob(jobId, {
+      status: "failed",
+      error: result.error || "Image generation failed",
+      error_code: result.errorCode || "AI_IMAGE_EDIT_FAILED",
+      completed_at: new Date().toISOString(),
+    });
+  } catch (e) {
+    console.error("[generate-from-template] background job failed", e);
+    await updateJob(jobId, {
+      status: "failed",
+      error: e instanceof Error ? e.message : "Unknown error",
+      error_code: "AI_IMAGE_EDIT_FAILED",
+      completed_at: new Date().toISOString(),
+    });
+  }
+}
+
+export async function handleGenerateFromTemplateRequest(req: Request) {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -135,227 +380,54 @@ export async function handleGenerateFromTemplateRequest(req: Request) {
     const geminiKey = Deno.env.get("GOOGLE_GEMINI_API_KEY");
     if (!geminiKey) throw new Error("GOOGLE_GEMINI_API_KEY not configured");
 
-    const { templateUrl, userImages, prompt, editImageDataUrl } = await req.json();
-    const isFollowUpEdit =
-      typeof editImageDataUrl === "string" &&
-      editImageDataUrl.length > 0 &&
-      typeof prompt === "string" &&
-      prompt.trim().length > 0;
+    const body = await req.json();
+    const action = body.action ?? "generate";
 
-    // Cap identity references — extra refs slow the model significantly
-    // without improving facial fidelity.
-    const t0 = Date.now();
-    let instruction = "";
-    let allImages: string[] = [];
+    if (action === "poll") {
+      const operationName = body.operationName;
+      if (!operationName) throw new Error("operationName required");
 
-    const outputInstruction =
-      "You must return exactly one generated image. Do not answer with text only.";
+      const supabase = getSupabaseAdmin();
+      const { data, error } = await supabase
+        .from("image_generation_jobs")
+        .select("status,image_data_url,error,error_code")
+        .eq("id", operationName)
+        .single();
+      if (error) throw new Error(`Image job lookup failed: ${error.message}`);
 
-    if (isFollowUpEdit) {
-      allImages = [await normalizeDataUrl(editImageDataUrl, EDIT_IMAGE_MAX_DIM)];
-      instruction = [
-        "You will receive one already generated chat image.",
-        "Apply ONLY the user's requested edit to this exact image.",
-        "Do not recreate the scene from scratch.",
-        "Do not change the face, identity, hair, pose, background, camera angle, lighting, composition, or text unless the user explicitly asks.",
-        `User edit request: ${prompt.trim()}`,
-        "Return the full edited image.",
-        "No explanation.",
-      ].join("\n");
-    } else {
-      if (!templateUrl) throw new Error("templateUrl required");
-      if (!Array.isArray(userImages) || userImages.length === 0) {
-        throw new Error("At least one user photo is required");
+      if (data.status === "processing" || data.status === "queued") {
+        return jsonResponse({ done: false, status: data.status });
       }
-
-      const trimmedUserImages = userImages.slice(0, MAX_USER_REFS);
-
-    // Fetch + normalize template AND user refs fully in parallel.
-    const [templateDataUrl, ...normalizedUserImages] = await Promise.all([
-      urlToDataUrl(templateUrl).then((u) => normalizeDataUrl(u, TEMPLATE_MAX_DIM)),
-      ...trimmedUserImages.map((img: string) =>
-        normalizeDataUrl(img, USER_REF_MAX_DIM),
-      ),
-    ]);
-    console.log("[generate-from-template] image prep ms:", Date.now() - t0);
-
-    // Default prompt — general, NOT just a face swap. Each template can
-    // override this from the admin panel (e.g. "swap face only" vs
-    // "replace the entire body"). Kept ~10 lines for clarity.
-    const DEFAULT_INSTRUCTION = [
-      "You will receive multiple images.",
-      "Image 1 is the TEMPLATE scene — keep its composition, framing, pose, lighting, color grading, wardrobe, background and overall style exactly as shown.",
-      "The remaining images are REFERENCE photos of the USER — use them ONLY as the identity source (face, hair, skin tone, distinctive features, approximate body shape).",
-      "Recreate the TEMPLATE scene so that the main subject IS the USER from the reference photos.",
-      "Do NOT keep the template person's face — fully replace it with the user's identity from the reference images.",
-      "Do NOT copy the user's clothing, background, pose or lighting from the reference photos — those come ONLY from the template.",
-      "Preserve the user's exact facial identity and likeness; do not invent a new or generic person.",
-      "Keep the result photorealistic, sharp and consistent with the template's camera and lens.",
-      "Return exactly ONE final edited image.",
-    ].join("\n");
-    instruction = (typeof prompt === "string" && prompt.trim().length > 0)
-      ? `${prompt.trim()}\n\n${outputInstruction}`
-      : `${DEFAULT_INSTRUCTION}\n${outputInstruction}`;
-    allImages = [templateDataUrl, ...normalizedUserImages];
-    }
-
-    // Put the instruction FIRST so the model reads the role of each image
-    // before seeing them, then the template, then the user refs.
-    const parts: Array<Record<string, unknown>> = [{ text: instruction }];
-    for (const url of allImages) {
-      const m = url.match(/^data:([^;]+);base64,(.+)$/);
-      const mime = m?.[1] ?? "image/png";
-      const data = m?.[2] ?? "";
-      parts.push({ inline_data: { mime_type: mime, data } });
-    }
-
-    async function callGemini(requestParts: Array<Record<string, unknown>>, attempt: string) {
-      let lastError:
-        | { status: number; message: string; parsedStatus?: string; model?: string }
-        | undefined;
-
-      for (let i = 0; i < GEMINI_MODELS.length; i++) {
-        const remainingMs = FUNCTION_BUDGET_MS - (Date.now() - startedAt);
-        if (remainingMs < 20_000) {
-          return {
-            ok: false,
-            response: jsonResponse({
-              error: "Image generation is taking longer than usual. Please retry with a simpler edit or one clear photo.",
-              errorCode: "AI_IMAGE_TIMEOUT",
-              fallback: true,
-            }),
-          };
-        }
-
-        const model = GEMINI_MODELS[i];
-        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
-        const attemptLabel = `${attempt}-${i + 1}/${GEMINI_MODELS.length}`;
-        console.log("[generate-from-template] calling", model, attemptLabel, "images:", allImages.length);
-
-        const controller = new AbortController();
-        const timeoutId = setTimeout(
-          () => controller.abort(),
-          Math.min(GEMINI_ATTEMPT_TIMEOUT_MS, remainingMs - 10_000),
-        );
-        const tFetch = Date.now();
-        let aiRes: Response;
-        try {
-          aiRes = await fetch(`${geminiUrl}?key=${geminiKey}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              contents: [{ role: "user", parts: requestParts }],
-              generationConfig: { responseModalities: ["IMAGE", "TEXT"] },
-            }),
-            signal: controller.signal,
-          });
-        } catch (e) {
-          clearTimeout(timeoutId);
-          const aborted = e instanceof Error && e.name === "AbortError";
-          console.error("Gemini request failed", e);
-          return {
-            ok: false,
-            response: jsonResponse({
-              error: aborted
-                ? "Image generation is taking longer than usual. Try one clear face photo or retry in a moment."
-                : `Image generation request failed: ${e instanceof Error ? e.message : String(e)}`,
-              errorCode: aborted ? "AI_IMAGE_TIMEOUT" : "AI_IMAGE_EDIT_FAILED",
-              fallback: true,
-            }),
-          };
-        }
-        clearTimeout(timeoutId);
-        console.log("[generate-from-template] gemini ms:", Date.now() - tFetch);
-
-        if (aiRes.ok) return { ok: true, json: await aiRes.json() };
-
-        const text = await aiRes.text();
-        const parsed = parseGeminiError(text);
-        console.error("Gemini image error", aiRes.status, parsed.message);
-        lastError = {
-          status: aiRes.status,
-          message: parsed.message,
-          parsedStatus: parsed.status,
-          model,
-        };
-
-        if (
-          i < GEMINI_MODELS.length - 1 &&
-          isRetryableGeminiStatus(aiRes.status, parsed.status) &&
-          FUNCTION_BUDGET_MS - (Date.now() - startedAt) > 35_000
-        ) {
-          await sleep(GEMINI_RETRY_DELAYS_MS[i] ?? 6_000);
-          continue;
-        }
-
-        break;
+      if (data.status === "completed") {
+        return jsonResponse({ done: true, imageDataUrl: data.image_data_url });
       }
-
-      const status = lastError?.status ?? 500;
-      const parsedStatus = lastError?.parsedStatus;
-      const message = lastError?.message ?? "Unknown image generation error";
-      const errorCode =
-        status === 429 || parsedStatus === "RESOURCE_EXHAUSTED"
-          ? "RATE_LIMITED"
-          : status === 402
-            ? "PAYMENT_REQUIRED"
-            : status === 503 || parsedStatus === "UNAVAILABLE"
-              ? "AI_IMAGE_MODEL_BUSY"
-              : "AI_IMAGE_EDIT_FAILED";
-
-      return {
-        ok: false,
-        response: jsonResponse({
-          error: friendlyGeminiError(status, message, parsedStatus),
-          errorCode,
-          fallback: true,
-        }),
-      };
-    }
-
-    let result = await callGemini(parts, "primary");
-    if (!result.ok) return result.response;
-
-    let imageDataUrl = extractImageDataUrl(result.json);
-    if (!imageDataUrl) {
-      if (FUNCTION_BUDGET_MS - (Date.now() - startedAt) < 45_000) {
-        return jsonResponse({
-          error: "The image editor needs one more try. Please retry with a shorter instruction.",
-          errorCode: "AI_IMAGE_EDIT_NO_OUTPUT",
-          fallback: true,
-        });
-      }
-
-      console.warn("Gemini returned no image on primary attempt", JSON.stringify(result.json).slice(0, 500));
-      const retryParts = [
-        {
-          text: `${instruction}\n\nRetry because the previous response did not include image data. Generate the edited image now. No explanation, no text-only answer.`,
-        },
-        ...parts.slice(1),
-      ];
-      result = await callGemini(retryParts, "retry-image-only");
-      if (!result.ok) return result.response;
-      imageDataUrl = extractImageDataUrl(result.json);
-    }
-
-    if (!imageDataUrl) {
-      console.error("Gemini returned no image after retry", JSON.stringify(result.json).slice(0, 500));
       return jsonResponse({
-        error: "The image editor did not return an image. Try a clearer face photo or another template.",
-        errorCode: "AI_IMAGE_EDIT_NO_OUTPUT",
+        done: true,
+        error: data.error || "Image generation failed",
+        errorCode: data.error_code || "AI_IMAGE_EDIT_FAILED",
         fallback: true,
       });
     }
 
-    if (imageDataUrl.startsWith("http")) {
-      try {
-        imageDataUrl = await urlToDataUrl(imageDataUrl);
-      } catch (e) {
-        console.error("Failed to inline AI image", e);
-      }
+    if (action === "start") {
+      const supabase = getSupabaseAdmin();
+      const { data, error } = await supabase
+        .from("image_generation_jobs")
+        .insert({ status: "processing" })
+        .select("id")
+        .single();
+      if (error) throw new Error(`Image job create failed: ${error.message}`);
+
+      const task = processImageJob(data.id, body, geminiKey);
+      const waitUntil = globalThis.EdgeRuntime?.waitUntil;
+      if (typeof waitUntil === "function") waitUntil(task);
+      else task.catch((e) => console.error("[generate-from-template] job task failed", e));
+
+      return jsonResponse({ operationName: data.id, done: false });
     }
 
-    return jsonResponse({ imageDataUrl });
+    const result = await generateImage(body, geminiKey);
+    return jsonResponse(result);
   } catch (e) {
     console.error("generate-from-template error:", e);
     return jsonResponse({ error: e instanceof Error ? e.message : "Unknown error" }, 500);
