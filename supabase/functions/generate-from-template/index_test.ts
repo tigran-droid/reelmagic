@@ -131,7 +131,91 @@ Deno.test("keeps identity replacement rules when a template prompt is provided",
     assertStringIncludes(instruction, "Make it cinematic and premium.");
     assertStringIncludes(parts[1]?.text ?? "", "TEMPLATE SCENE ONLY");
     assertStringIncludes(parts[3]?.text ?? "", "USER IDENTITY REFERENCE");
-    assertEquals(geminiRequestBody?.generationConfig?.responseModalities, ["Image"]);
+    assertEquals(geminiRequestBody?.generationConfig?.responseModalities, ["TEXT", "IMAGE"]);
+  } finally {
+    fetchStub.restore();
+    envStub.restore();
+  }
+});
+
+Deno.test("tries another image model when the first response has no image", async () => {
+  const originalEnvGet = Deno.env.get;
+  const originalFetch = globalThis.fetch;
+  let geminiCalls = 0;
+
+  const envStub = stub(Deno.env, "get", (key: string) => {
+    if (key === "GOOGLE_GEMINI_API_KEY") return "test-key";
+    return originalEnvGet.call(Deno.env, key);
+  });
+
+  const fetchStub = stub(globalThis, "fetch", async (input: string | Request | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+
+    if (url === "https://example.com/template.png") {
+      return new Response(Uint8Array.from([137, 80, 78, 71]), {
+        status: 200,
+        headers: { "Content-Type": "image/png" },
+      });
+    }
+
+    if (url.includes("generativelanguage.googleapis.com")) {
+      geminiCalls += 1;
+      if (geminiCalls === 1) {
+        return new Response(
+          JSON.stringify({
+            candidates: [{ content: { parts: [{ text: "I cannot return an image." }] } }],
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      return new Response(
+        JSON.stringify({
+          candidates: [
+            {
+              content: {
+                parts: [
+                  {
+                    inline_data: {
+                      mime_type: "image/png",
+                      data: "iVBORw0KGgo=",
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    return originalFetch(input, init);
+  });
+
+  try {
+    const response = await handleGenerateFromTemplateRequest(
+      new Request("http://localhost/generate-from-template", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          templateUrl: "https://example.com/template.png",
+          userImages: ["data:image/png;base64,iVBORw0KGgo="],
+        }),
+      }),
+    );
+
+    const body = await response.json();
+
+    assertEquals(response.status, 200);
+    assertEquals(geminiCalls, 2);
+    assert(body.imageDataUrl);
   } finally {
     fetchStub.restore();
     envStub.restore();

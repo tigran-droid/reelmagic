@@ -11,6 +11,7 @@ const corsHeaders = {
 
 const GEMINI_MODELS = [
   "gemini-3.1-flash-image-preview",
+  "gemini-3-pro-image-preview",
   "gemini-2.5-flash-image",
 ];
 const MAX_IMAGE_BYTES = 480_000;
@@ -118,6 +119,7 @@ function parseGeminiError(text: string) {
 function isRetryableGeminiStatus(status: number, parsedStatus?: string) {
   return (
     status === 429 ||
+    status === 404 ||
     status === 500 ||
     status === 502 ||
     status === 503 ||
@@ -271,7 +273,10 @@ async function callGemini(
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contents: [{ role: "user", parts: requestParts }],
-          generationConfig: { responseModalities: ["Image"] },
+          generationConfig: {
+            responseModalities: ["TEXT", "IMAGE"],
+            responseFormat: { image: { aspectRatio: "3:4" } },
+          },
         }),
         signal: controller.signal,
       });
@@ -301,7 +306,7 @@ async function callGemini(
         extractTextResponse(json),
       );
       if (i < GEMINI_MODELS.length - 1) continue;
-      return { ok: true, json };
+      return { ok: true, json, modelText: extractTextResponse(json) };
     }
 
     const text = await aiRes.text();
@@ -314,19 +319,26 @@ async function callGemini(
       model,
     };
 
-    if (
-      i < GEMINI_MODELS.length - 1 &&
-      isRetryableGeminiStatus(aiRes.status, parsed.status) &&
-      FUNCTION_BUDGET_MS - (Date.now() - startedAt) > 35_000
-    ) {
-      await sleep(GEMINI_RETRY_DELAYS_MS[i] ?? 1_500);
-      continue;
+    if (i < GEMINI_MODELS.length - 1) {
+      const retryable =
+        isRetryableGeminiStatus(aiRes.status, parsed.status) ||
+        aiRes.status === 400;
+      if (retryable && FUNCTION_BUDGET_MS - (Date.now() - startedAt) > 35_000) {
+        await sleep(GEMINI_RETRY_DELAYS_MS[i] ?? 1_500);
+        continue;
+      }
     }
 
     break;
   }
 
-  if (lastTextOnlyJson) return { ok: true, json: lastTextOnlyJson };
+  if (lastTextOnlyJson) {
+    return {
+      ok: true,
+      json: lastTextOnlyJson,
+      modelText: extractTextResponse(lastTextOnlyJson),
+    };
+  }
 
   const status = lastError?.status ?? 500;
   const parsedStatus = lastError?.parsedStatus;
@@ -344,10 +356,35 @@ async function callGemini(
   };
 }
 
+function buildSoftVisualFallbackInstruction(body: Record<string, unknown>) {
+  const prompt = typeof body.prompt === "string" ? body.prompt.trim() : "";
+  const editImageDataUrl =
+    typeof body.editImageDataUrl === "string" && body.editImageDataUrl.length > 0
+      ? body.editImageDataUrl
+      : "";
+
+  if (editImageDataUrl && prompt) {
+    return [
+      "Create one photorealistic edited image from the provided current chat image.",
+      "Apply the user's edit request naturally while keeping the same person, scene, composition and lighting.",
+      `User edit request: ${prompt}`,
+      "Return an image result. Do not return text only.",
+    ].join("\n");
+  }
+
+  return [
+    "Create one photorealistic vertical image using the provided references.",
+    "IMAGE 1 is the scene template: use its pose, body placement, outfit, background, lighting, camera angle and overall style.",
+    "IMAGE 2 is the user's visual reference: make the main subject generally resemble this uploaded person, including hair, skin tone, facial features and overall look.",
+    "Produce a new original image that combines the scene template with the uploaded user's appearance.",
+    "Return an image result. Do not return text only.",
+  ].join("\n");
+}
+
 async function generateImage(body: Record<string, unknown>, geminiKey: string) {
   const startedAt = Date.now();
   const t0 = Date.now();
-  const { parts, instruction, imageCount } = await buildGeminiParts(body);
+  const { parts, imageCount } = await buildGeminiParts(body);
   console.log("[generate-from-template] image prep ms:", Date.now() - t0);
 
   let result = await callGemini(geminiKey, parts, imageCount, startedAt, "primary");
@@ -357,24 +394,26 @@ async function generateImage(body: Record<string, unknown>, geminiKey: string) {
   if (!imageDataUrl) {
     const retryParts = [
       {
-        text: [
-          "Generate exactly one photorealistic edited image now.",
-          "Return image data only, no explanation and no text-only answer.",
-          "If this is a template recreation: use IMAGE 1 only for the scene, pose, clothing, background and lighting; use IMAGE 2 for the person's face, hair, skin tone and identity.",
-          "If this is a follow-up edit: edit the current chat image directly.",
-          instruction,
-        ].join("\n"),
+        text: buildSoftVisualFallbackInstruction(body),
       },
       ...parts.slice(1),
     ];
-    result = await callGemini(geminiKey, retryParts, imageCount, startedAt, "retry-image-only");
+    console.warn(
+      "[generate-from-template] retrying with visual fallback after no image",
+      result.modelText || "",
+    );
+    result = await callGemini(geminiKey, retryParts, imageCount, startedAt, "soft-visual-reference");
     if (!result.ok) return { error: result.error, errorCode: result.errorCode, fallback: true };
     imageDataUrl = extractImageDataUrl(result.json);
   }
 
   if (!imageDataUrl) {
+    const modelText = extractTextResponse(result.json) || result.modelText || "";
+    const detail = modelText
+      ? ` AI replied with text instead: ${modelText.slice(0, 220)}`
+      : "";
     return {
-      error: "The image editor did not return an image. Try a clearer photo or a shorter instruction.",
+      error: `The image editor did not return an image.${detail}`,
       errorCode: "AI_IMAGE_EDIT_NO_OUTPUT",
       fallback: true,
     };
