@@ -172,6 +172,8 @@ function CreatePage() {
     const trimmedPrompt = promptText?.trim();
     const editImageDataUrl = trimmedPrompt ? getLatestResultImage(messages) : null;
     const customPrompt = trimmedPrompt || getCustomPrompt(reel.prompt);
+    const requestTemplateUrl = editImageDataUrl ?? templateUrl;
+    const requestUserImages = editImageDataUrl ? [editImageDataUrl] : imgs;
     setMessages((m) => [
       ...m,
       {
@@ -181,8 +183,8 @@ function CreatePage() {
         text: promptText
           ? "Recreating with your notes…"
           : "Recreating your photo…",
-        templateUrl,
-        userPreview: imgs[0],
+        templateUrl: requestTemplateUrl,
+        userPreview: requestUserImages[0],
       },
     ]);
     try {
@@ -198,8 +200,8 @@ function CreatePage() {
         "generate-from-template",
         {
           body: {
-            templateUrl,
-            userImages: imgs,
+            templateUrl: requestTemplateUrl,
+            userImages: requestUserImages,
             ...(customPrompt ? { prompt: customPrompt } : {}),
             ...(editImageDataUrl ? { editImageDataUrl } : {}),
           },
