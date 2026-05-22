@@ -202,6 +202,11 @@ Deno.test("uses one provider call for follow-up edits", async () => {
   const originalEnvGet = Deno.env.get;
   const originalFetch = globalThis.fetch;
   const modelUrls: string[] = [];
+  let geminiRequestBody:
+    | {
+        contents?: Array<{ parts?: Array<{ text?: string }> }>;
+      }
+    | undefined;
 
   const envStub = stub(Deno.env, "get", (key: string) => {
     if (key === "GOOGLE_GEMINI_API_KEY") return "test-key";
@@ -213,6 +218,7 @@ Deno.test("uses one provider call for follow-up edits", async () => {
 
     if (url.includes("generativelanguage.googleapis.com")) {
       modelUrls.push(url);
+      geminiRequestBody = JSON.parse(String(init?.body));
       return new Response(
         JSON.stringify({
           candidates: [
@@ -255,10 +261,13 @@ Deno.test("uses one provider call for follow-up edits", async () => {
     );
 
     const body = await response.json();
+    const instruction = geminiRequestBody?.contents?.[0]?.parts?.[0]?.text ?? "";
 
     assertEquals(response.status, 200);
     assertEquals(modelUrls.length, 1);
     assertStringIncludes(modelUrls[0], "gemini-2.5-flash-image");
+    assertStringIncludes(instruction, "STRUCTURAL edit");
+    assertStringIncludes(instruction, "allowed to recreate the scene");
     assert(body.imageDataUrl);
   } finally {
     fetchStub.restore();

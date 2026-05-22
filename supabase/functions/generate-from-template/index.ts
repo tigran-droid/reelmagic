@@ -13,7 +13,7 @@ const GEMINI_MODEL = "gemini-2.5-flash-image";
 const MAX_IMAGE_BYTES = 480_000;
 const TEMPLATE_MAX_DIM = 768;
 const USER_REF_MAX_DIM = 768;
-const EDIT_IMAGE_MAX_DIM = 768;
+const EDIT_IMAGE_MAX_DIM = 640;
 const FUNCTION_BUDGET_MS = 360_000;
 const GEMINI_ATTEMPT_TIMEOUT_MS = 300_000;
 const MAX_USER_REFS = 1;
@@ -126,9 +126,36 @@ function isFollowUpEditBody(body: Record<string, unknown>) {
   );
 }
 
+function isStructuralFollowUpEdit(prompt: unknown) {
+  if (typeof prompt !== "string") return false;
+  const text = prompt.toLowerCase();
+  return [
+    "position",
+    "pose",
+    "posing",
+    "move",
+    "relocate",
+    "turn",
+    "rotate",
+    "stand",
+    "standing",
+    "sit",
+    "sitting",
+    "walk",
+    "walking",
+    "body angle",
+    "camera angle",
+    "composition",
+    "դիրք",
+    "պոզ",
+    "կեցվածք",
+  ].some((word) => text.includes(word));
+}
+
 async function buildGeminiParts(body: Record<string, unknown>) {
   const { templateUrl, userImages, prompt, editImageDataUrl } = body;
   const isFollowUpEdit = isFollowUpEditBody(body);
+  const isStructuralEdit = isStructuralFollowUpEdit(prompt);
   const outputInstruction =
     "You must return exactly one generated image. Do not answer with text only.";
 
@@ -139,15 +166,25 @@ async function buildGeminiParts(body: Record<string, unknown>) {
   if (isFollowUpEdit) {
     allImages = [await normalizeDataUrl(editImageDataUrl, EDIT_IMAGE_MAX_DIM)];
     imageLabels = ["CURRENT CHAT IMAGE TO EDIT. This is the exact image that must be edited."];
-    instruction = [
-      "You will receive one already generated chat image.",
-      "Apply ONLY the user's requested edit to this exact image.",
-      "Do not recreate the scene from scratch.",
-      "Do not change the face, identity, hair, pose, background, camera angle, lighting, composition, or text unless the user explicitly asks.",
-      `User edit request: ${prompt.trim()}`,
-      "Return the full edited image.",
-      "No explanation.",
-    ].join("\n");
+    instruction = isStructuralEdit
+      ? [
+          "You will receive one already generated chat image.",
+          "This request is a STRUCTURAL edit: the user is asking to change pose, position, movement, camera angle, or composition.",
+          "Create a new full image based on the current chat image and clearly apply the requested structural change.",
+          "It is allowed to recreate the scene as needed to satisfy the requested position or pose change.",
+          "Preserve the same person, face identity, hair, outfit style, general setting, lighting, color grading, and photorealistic quality unless the user explicitly asks otherwise.",
+          "Do not return a text explanation. Return exactly one final image.",
+          `User edit request: ${prompt.trim()}`,
+        ].join("\n")
+      : [
+          "You will receive one already generated chat image.",
+          "Apply ONLY the user's requested local edit to this exact image.",
+          "Do not recreate the scene from scratch.",
+          "Do not change the face, identity, hair, pose, background, camera angle, lighting, composition, or text unless the user explicitly asks.",
+          `User edit request: ${prompt.trim()}`,
+          "Return the full edited image.",
+          "No explanation.",
+        ].join("\n");
   } else {
     if (!templateUrl) throw new Error("templateUrl required");
     if (!Array.isArray(userImages) || userImages.length === 0) {
