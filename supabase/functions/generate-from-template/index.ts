@@ -9,7 +9,8 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const GEMINI_MODEL = "gemini-2.5-flash-image";
+const TEMPLATE_RECREATE_MODEL = "gemini-3.1-flash-image-preview";
+const FOLLOW_UP_EDIT_MODEL = "gemini-2.5-flash-image";
 const MAX_IMAGE_BYTES = 480_000;
 const TEMPLATE_MAX_DIM = 768;
 const USER_REF_MAX_DIM = 768;
@@ -259,6 +260,7 @@ async function callGemini(
   imageCount: number,
   startedAt: number,
   attempt: string,
+  model: string,
 ) {
   const remainingMs = FUNCTION_BUDGET_MS - (Date.now() - startedAt);
   if (remainingMs < 20_000) {
@@ -269,8 +271,8 @@ async function callGemini(
     };
   }
 
-  const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
-  console.log("[generate-from-template] calling", GEMINI_MODEL, attempt, "images:", imageCount);
+  const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+  console.log("[generate-from-template] calling", model, attempt, "images:", imageCount);
 
   const controller = new AbortController();
   const timeoutId = setTimeout(
@@ -311,7 +313,7 @@ async function callGemini(
     if (!extractImageDataUrl(json)) {
       console.warn(
         "[generate-from-template] model returned no image",
-        GEMINI_MODEL,
+        model,
         extractTextResponse(json),
       );
     }
@@ -339,9 +341,10 @@ async function generateImage(body: Record<string, unknown>, geminiKey: string) {
   const startedAt = Date.now();
   const t0 = Date.now();
   const { parts, imageCount } = await buildGeminiParts(body);
+  const model = isFollowUpEditBody(body) ? FOLLOW_UP_EDIT_MODEL : TEMPLATE_RECREATE_MODEL;
   console.log("[generate-from-template] image prep ms:", Date.now() - t0);
 
-  const result = await callGemini(geminiKey, parts, imageCount, startedAt, "primary");
+  const result = await callGemini(geminiKey, parts, imageCount, startedAt, "primary", model);
   if (!result.ok) return { error: result.error, errorCode: result.errorCode, fallback: true };
 
   let imageDataUrl = extractImageDataUrl(result.json);

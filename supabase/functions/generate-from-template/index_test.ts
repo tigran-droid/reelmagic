@@ -62,6 +62,7 @@ Deno.test("keeps identity replacement rules when a template prompt is provided",
         generationConfig?: { responseModalities?: string[] };
       }
     | undefined;
+  let geminiUrl = "";
 
   const envStub = stub(Deno.env, "get", (key: string) => {
     if (key === "GOOGLE_GEMINI_API_KEY") return "test-key";
@@ -79,6 +80,7 @@ Deno.test("keeps identity replacement rules when a template prompt is provided",
     }
 
     if (url.includes("generativelanguage.googleapis.com")) {
+      geminiUrl = url;
       geminiRequestBody = JSON.parse(String(init?.body));
       return new Response(
         JSON.stringify({
@@ -131,6 +133,7 @@ Deno.test("keeps identity replacement rules when a template prompt is provided",
     assertStringIncludes(instruction, "Make it cinematic and premium.");
     assertStringIncludes(parts[1]?.text ?? "", "TEMPLATE SCENE ONLY");
     assertStringIncludes(parts[3]?.text ?? "", "USER IDENTITY REFERENCE");
+    assertStringIncludes(geminiUrl, "gemini-3.1-flash-image-preview");
     assertEquals(geminiRequestBody?.generationConfig?.responseModalities, ["TEXT", "IMAGE"]);
   } finally {
     fetchStub.restore();
