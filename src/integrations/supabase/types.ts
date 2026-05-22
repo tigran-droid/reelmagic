@@ -14,6 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      image_generation_jobs: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          error: string | null
+          error_code: string | null
+          id: string
+          image_data_url: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          error?: string | null
+          error_code?: string | null
+          id?: string
+          image_data_url?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          error?: string | null
+          error_code?: string | null
+          id?: string
+          image_data_url?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       photoshop_items: {
         Row: {
           audio_end_sec: number | null
