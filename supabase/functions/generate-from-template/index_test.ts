@@ -57,7 +57,10 @@ Deno.test("keeps identity replacement rules when a template prompt is provided",
   const originalEnvGet = Deno.env.get;
   const originalFetch = globalThis.fetch;
   let geminiRequestBody:
-    | { contents?: Array<{ parts?: Array<{ text?: string }> }> }
+    | {
+        contents?: Array<{ parts?: Array<{ text?: string }> }>;
+        generationConfig?: { responseModalities?: string[] };
+      }
     | undefined;
 
   const envStub = stub(Deno.env, "get", (key: string) => {
@@ -128,6 +131,7 @@ Deno.test("keeps identity replacement rules when a template prompt is provided",
     assertStringIncludes(instruction, "Make it cinematic and premium.");
     assertStringIncludes(parts[1]?.text ?? "", "TEMPLATE SCENE ONLY");
     assertStringIncludes(parts[3]?.text ?? "", "USER IDENTITY REFERENCE");
+    assertEquals(geminiRequestBody?.generationConfig?.responseModalities, ["Image"]);
   } finally {
     fetchStub.restore();
     envStub.restore();

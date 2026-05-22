@@ -10,8 +10,8 @@ const corsHeaders = {
 };
 
 const GEMINI_MODELS = [
-  "gemini-2.5-flash-image",
   "gemini-3.1-flash-image-preview",
+  "gemini-2.5-flash-image",
 ];
 const MAX_IMAGE_BYTES = 480_000;
 const TEMPLATE_MAX_DIM = 768;
@@ -50,6 +50,15 @@ function extractImageDataUrl(json: Record<string, unknown>): string | undefined 
     if (typeof uri === "string" && uri.length > 0) return uri;
   }
   return undefined;
+}
+
+function extractTextResponse(json: Record<string, unknown>): string {
+  const respParts = json?.candidates?.[0]?.content?.parts ?? [];
+  return respParts
+    .map((p) => (typeof p?.text === "string" ? p.text : ""))
+    .filter(Boolean)
+    .join("\n")
+    .slice(0, 500);
 }
 
 async function urlToDataUrl(url: string): Promise<string> {
@@ -232,6 +241,7 @@ async function callGemini(
   let lastError:
     | { status: number; message: string; parsedStatus?: string; model?: string }
     | undefined;
+  let lastTextOnlyJson: Record<string, unknown> | undefined;
 
   for (let i = 0; i < GEMINI_MODELS.length; i++) {
     const remainingMs = FUNCTION_BUDGET_MS - (Date.now() - startedAt);
@@ -261,7 +271,7 @@ async function callGemini(
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contents: [{ role: "user", parts: requestParts }],
-          generationConfig: { responseModalities: ["IMAGE", "TEXT"] },
+          generationConfig: { responseModalities: ["Image"] },
         }),
         signal: controller.signal,
       });
@@ -280,7 +290,19 @@ async function callGemini(
     clearTimeout(timeoutId);
     console.log("[generate-from-template] gemini ms:", Date.now() - tFetch);
 
-    if (aiRes.ok) return { ok: true, json: await aiRes.json() };
+    if (aiRes.ok) {
+      const json = await aiRes.json();
+      if (extractImageDataUrl(json)) return { ok: true, json };
+
+      lastTextOnlyJson = json;
+      console.warn(
+        "[generate-from-template] model returned no image",
+        model,
+        extractTextResponse(json),
+      );
+      if (i < GEMINI_MODELS.length - 1) continue;
+      return { ok: true, json };
+    }
 
     const text = await aiRes.text();
     const parsed = parseGeminiError(text);
@@ -303,6 +325,8 @@ async function callGemini(
 
     break;
   }
+
+  if (lastTextOnlyJson) return { ok: true, json: lastTextOnlyJson };
 
   const status = lastError?.status ?? 500;
   const parsedStatus = lastError?.parsedStatus;
@@ -333,7 +357,13 @@ async function generateImage(body: Record<string, unknown>, geminiKey: string) {
   if (!imageDataUrl) {
     const retryParts = [
       {
-        text: `${instruction}\n\nRetry because the previous response did not include image data. Generate the edited image now. No explanation, no text-only answer.`,
+        text: [
+          "Generate exactly one photorealistic edited image now.",
+          "Return image data only, no explanation and no text-only answer.",
+          "If this is a template recreation: use IMAGE 1 only for the scene, pose, clothing, background and lighting; use IMAGE 2 for the person's face, hair, skin tone and identity.",
+          "If this is a follow-up edit: edit the current chat image directly.",
+          instruction,
+        ].join("\n"),
       },
       ...parts.slice(1),
     ];
