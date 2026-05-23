@@ -36,8 +36,8 @@ const FEED_SELECT =
   "id,image_url,image_urls,title,hashtags,song,audio_url,audio_start_sec,audio_end_sec,prompt,created_at";
 const FEED_PAGE_SIZE = 120;
 const CACHE_TIME_MS = 5 * 60_000;
-const UPLOAD_IMAGE_MAX_EDGE = 1280;
-const UPLOAD_IMAGE_QUALITY = 0.82;
+const UPLOAD_IMAGE_MAX_EDGE = 1024;
+const UPLOAD_IMAGE_QUALITY = 0.78;
 
 function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -67,7 +67,7 @@ async function optimizeImageForUpload(file: File): Promise<string> {
     const width = Math.max(1, Math.round(image.naturalWidth * scale));
     const height = Math.max(1, Math.round(image.naturalHeight * scale));
 
-    if (scale === 1 && file.size < 1_200_000) return originalDataUrl;
+    if (scale === 1 && file.size < 800_000) return originalDataUrl;
 
     const canvas = document.createElement("canvas");
     canvas.width = width;

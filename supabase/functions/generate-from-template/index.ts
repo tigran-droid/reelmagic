@@ -9,15 +9,18 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const TEMPLATE_RECREATE_MODEL = "gemini-3.1-flash-image-preview";
+const TEMPLATE_RECREATE_MODEL = "gemini-2.5-flash-image";
 const FOLLOW_UP_EDIT_MODEL = "gemini-2.5-flash-image";
-const MAX_IMAGE_BYTES = 480_000;
-const TEMPLATE_MAX_DIM = 768;
-const USER_REF_MAX_DIM = 768;
-const EDIT_IMAGE_MAX_DIM = 640;
+const MAX_IMAGE_BYTES = 360_000;
+const TEMPLATE_MAX_DIM = 640;
+const USER_REF_MAX_DIM = 704;
+const EDIT_IMAGE_MAX_DIM = 576;
 const FUNCTION_BUDGET_MS = 360_000;
 const GEMINI_ATTEMPT_TIMEOUT_MS = 300_000;
 const MAX_USER_REFS = 1;
+const REQUEST_HASH_VERSION = "generate-from-template:user-first:v3";
+const COMPLETED_JOB_CACHE_MS = 2 * 60 * 60 * 1000;
+const ACTIVE_JOB_REUSE_MS = 6 * 60 * 1000;
 
 function jsonResponse(body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -84,7 +87,7 @@ async function normalizeDataUrl(dataUrl: string, maxDim: number): Promise<string
     if (!ctx) return dataUrl;
 
     ctx.drawImage(bitmap, 0, 0, width, height);
-    const out = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.8 });
+    const out = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.76 });
     const buf = new Uint8Array(await out.arrayBuffer());
     let bin = "";
     for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i]);
@@ -148,9 +151,126 @@ function isStructuralFollowUpEdit(prompt: unknown) {
     "camera angle",
     "composition",
     "դիրք",
+    "դիրքը",
     "պոզ",
     "կեցվածք",
+    "տեղափոխ",
+    "շրջ",
+    "կանգն",
+    "նստ",
   ].some((word) => text.includes(word));
+}
+
+function toHex(bytes: ArrayBuffer) {
+  return [...new Uint8Array(bytes)]
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+async function hashString(value: string) {
+  return toHex(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)));
+}
+
+function getImageModelForBody(body: Record<string, unknown>) {
+  return isFollowUpEditBody(body) ? FOLLOW_UP_EDIT_MODEL : TEMPLATE_RECREATE_MODEL;
+}
+
+async function buildRequestHash(body: Record<string, unknown>, model: string) {
+  const prompt =
+    typeof body.prompt === "string" && body.prompt.trim().length > 0
+      ? body.prompt.trim()
+      : "";
+
+  if (isFollowUpEditBody(body)) {
+    const editImageHash = await hashString(String(body.editImageDataUrl));
+    return hashString(
+      JSON.stringify({
+        version: REQUEST_HASH_VERSION,
+        mode: "follow-up-edit",
+        model,
+        prompt,
+        editImageHash,
+      }),
+    );
+  }
+
+  const userImages = Array.isArray(body.userImages) ? body.userImages : [];
+  const userImageHashes = await Promise.all(
+    userImages.slice(0, MAX_USER_REFS).map((img) => hashString(String(img))),
+  );
+
+  return hashString(
+    JSON.stringify({
+      version: REQUEST_HASH_VERSION,
+      mode: "template-recreate",
+      model,
+      templateUrl: typeof body.templateUrl === "string" ? body.templateUrl : "",
+      prompt,
+      userImageHashes,
+    }),
+  );
+}
+
+function isMissingJobMetadataError(error: unknown) {
+  const err = error as { code?: string; message?: string } | null;
+  const message = err?.message ?? "";
+  return (
+    err?.code === "42703" ||
+    message.includes("request_hash") ||
+    message.includes("duration_ms") ||
+    message.includes("model")
+  );
+}
+
+async function findReusableJob(supabase: ReturnType<typeof getSupabaseAdmin>, requestHash: string) {
+  const completedCutoff = new Date(Date.now() - COMPLETED_JOB_CACHE_MS).toISOString();
+  const activeCutoffMs = Date.now() - ACTIVE_JOB_REUSE_MS;
+
+  const { data, error } = await supabase
+    .from("image_generation_jobs")
+    .select("id,status,image_data_url,error,error_code,created_at,updated_at")
+    .eq("request_hash", requestHash)
+    .in("status", ["queued", "processing", "completed"])
+    .gte("created_at", completedCutoff)
+    .order("created_at", { ascending: false })
+    .limit(8);
+
+  if (error) {
+    if (!isMissingJobMetadataError(error)) {
+      console.error("[generate-from-template] reusable job lookup failed", error);
+    }
+    return null;
+  }
+
+  const completed = data?.find((job) => job.status === "completed" && job.image_data_url);
+  if (completed) return completed;
+
+  return data?.find((job) => {
+    if (job.status !== "queued" && job.status !== "processing") return false;
+    const touchedAt = Date.parse(job.updated_at ?? job.created_at ?? "");
+    return Number.isFinite(touchedAt) && touchedAt >= activeCutoffMs;
+  }) ?? null;
+}
+
+async function insertImageJob(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  requestHash: string,
+  model: string,
+) {
+  const insertWithMetadata = await supabase
+    .from("image_generation_jobs")
+    .insert({ status: "processing", request_hash: requestHash, model })
+    .select("id")
+    .single();
+
+  if (!insertWithMetadata.error) return insertWithMetadata;
+  if (!isMissingJobMetadataError(insertWithMetadata.error)) return insertWithMetadata;
+
+  return supabase
+    .from("image_generation_jobs")
+    .insert({ status: "processing" })
+    .select("id")
+    .single();
 }
 
 async function buildGeminiParts(body: Record<string, unknown>) {
@@ -286,7 +406,7 @@ async function callGemini(
       body: JSON.stringify({
         contents: [{ role: "user", parts: requestParts }],
         generationConfig: {
-          responseModalities: ["TEXT", "IMAGE"],
+          responseModalities: ["IMAGE"],
         },
       }),
       signal: controller.signal,
@@ -339,7 +459,7 @@ async function generateImage(body: Record<string, unknown>, geminiKey: string) {
   const startedAt = Date.now();
   const t0 = Date.now();
   const { parts, imageCount } = await buildGeminiParts(body);
-  const model = isFollowUpEditBody(body) ? FOLLOW_UP_EDIT_MODEL : TEMPLATE_RECREATE_MODEL;
+  const model = getImageModelForBody(body);
   console.log("[generate-from-template] image prep ms:", Date.now() - t0);
 
   const result = await callGemini(geminiKey, parts, imageCount, startedAt, "primary", model);
@@ -375,16 +495,33 @@ async function updateJob(jobId: string, patch: Record<string, unknown>) {
     .from("image_generation_jobs")
     .update({ ...patch, updated_at: new Date().toISOString() })
     .eq("id", jobId);
-  if (error) console.error("[generate-from-template] job update failed", error);
+  if (!error) return;
+  if (isMissingJobMetadataError(error)) {
+    const fallbackPatch = { ...patch };
+    delete fallbackPatch.request_hash;
+    delete fallbackPatch.duration_ms;
+    delete fallbackPatch.model;
+    const retry = await supabase
+      .from("image_generation_jobs")
+      .update({ ...fallbackPatch, updated_at: new Date().toISOString() })
+      .eq("id", jobId);
+    if (!retry.error) return;
+    console.error("[generate-from-template] job update retry failed", retry.error);
+    return;
+  }
+  console.error("[generate-from-template] job update failed", error);
 }
 
 async function processImageJob(jobId: string, body: Record<string, unknown>, geminiKey: string) {
+  const startedAt = Date.now();
   try {
     const result = await generateImage(body, geminiKey);
+    const durationMs = Date.now() - startedAt;
     if (result.imageDataUrl) {
       await updateJob(jobId, {
         status: "completed",
         image_data_url: result.imageDataUrl,
+        duration_ms: durationMs,
         completed_at: new Date().toISOString(),
       });
       return;
@@ -394,6 +531,7 @@ async function processImageJob(jobId: string, body: Record<string, unknown>, gem
       status: "failed",
       error: result.error || "Image generation failed",
       error_code: result.errorCode || "AI_IMAGE_EDIT_FAILED",
+      duration_ms: durationMs,
       completed_at: new Date().toISOString(),
     });
   } catch (e) {
@@ -447,11 +585,24 @@ export async function handleGenerateFromTemplateRequest(req: Request) {
 
     if (action === "start") {
       const supabase = getSupabaseAdmin();
-      const { data, error } = await supabase
-        .from("image_generation_jobs")
-        .insert({ status: "processing" })
-        .select("id")
-        .single();
+      const model = getImageModelForBody(body);
+      const requestHash = await buildRequestHash(body, model);
+      const reusableJob = await findReusableJob(supabase, requestHash);
+      if (reusableJob?.status === "completed" && reusableJob.image_data_url) {
+        return jsonResponse({
+          imageDataUrl: reusableJob.image_data_url,
+          cached: true,
+        });
+      }
+      if (reusableJob) {
+        return jsonResponse({
+          operationName: reusableJob.id,
+          done: false,
+          reused: true,
+        });
+      }
+
+      const { data, error } = await insertImageJob(supabase, requestHash, model);
       if (error) throw new Error(`Image job create failed: ${error.message}`);
 
       const task = processImageJob(data.id, body, geminiKey);

@@ -84,6 +84,53 @@ const regionalReels: Reel[] = [
   },
 ];
 
+const UPLOAD_IMAGE_MAX_EDGE = 1024;
+const UPLOAD_IMAGE_QUALITY = 0.78;
+
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result as string);
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(file);
+  });
+}
+
+function loadImage(dataUrl: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("Failed to load selected image"));
+    img.src = dataUrl;
+  });
+}
+
+async function optimizeImageForUpload(file: File): Promise<string> {
+  const originalDataUrl = await fileToDataUrl(file);
+
+  try {
+    const image = await loadImage(originalDataUrl);
+    const longestEdge = Math.max(image.naturalWidth, image.naturalHeight);
+    const scale = Math.min(1, UPLOAD_IMAGE_MAX_EDGE / Math.max(longestEdge, 1));
+    const width = Math.max(1, Math.round(image.naturalWidth * scale));
+    const height = Math.max(1, Math.round(image.naturalHeight * scale));
+
+    if (scale === 1 && file.size < 800_000) return originalDataUrl;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return originalDataUrl;
+
+    ctx.drawImage(image, 0, 0, width, height);
+    return canvas.toDataURL("image/jpeg", UPLOAD_IMAGE_QUALITY);
+  } catch {
+    return originalDataUrl;
+  }
+}
+
 function Feed() {
   const [tab, setTab] = useState<"global" | "regional">("global");
   const [activeIndex, setActiveIndex] = useState(0);
@@ -121,17 +168,7 @@ function Feed() {
     e.target.value = "";
     if (files.length === 0) return;
     try {
-      const dataUrls = await Promise.all(
-        files.map(
-          (f) =>
-            new Promise<string>((resolve, reject) => {
-              const r = new FileReader();
-              r.onload = () => resolve(r.result as string);
-              r.onerror = () => reject(r.error);
-              r.readAsDataURL(f);
-            }),
-        ),
-      );
+      const dataUrls = await Promise.all(files.map(optimizeImageForUpload));
       sessionStorage.setItem("create:userImages", JSON.stringify(dataUrls));
       sessionStorage.setItem("create:autoRun", "1");
     } catch {

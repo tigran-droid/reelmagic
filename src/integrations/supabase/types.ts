@@ -18,30 +18,39 @@ export type Database = {
         Row: {
           completed_at: string | null
           created_at: string
+          duration_ms: number | null
           error: string | null
           error_code: string | null
           id: string
           image_data_url: string | null
+          model: string | null
+          request_hash: string | null
           status: string
           updated_at: string
         }
         Insert: {
           completed_at?: string | null
           created_at?: string
+          duration_ms?: number | null
           error?: string | null
           error_code?: string | null
           id?: string
           image_data_url?: string | null
+          model?: string | null
+          request_hash?: string | null
           status?: string
           updated_at?: string
         }
         Update: {
           completed_at?: string | null
           created_at?: string
+          duration_ms?: number | null
           error?: string | null
           error_code?: string | null
           id?: string
           image_data_url?: string | null
+          model?: string | null
+          request_hash?: string | null
           status?: string
           updated_at?: string
         }

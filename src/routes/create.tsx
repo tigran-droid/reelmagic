@@ -54,8 +54,8 @@ type ChatMessage =
 const DRAFT_KEY = "create:draft";
 const USER_IMAGES_KEY = "create:userImages";
 const AUTORUN_KEY = "create:autoRun";
-const UPLOAD_IMAGE_MAX_EDGE = 1280;
-const UPLOAD_IMAGE_QUALITY = 0.82;
+const UPLOAD_IMAGE_MAX_EDGE = 1024;
+const UPLOAD_IMAGE_QUALITY = 0.78;
 const LEGACY_DEFAULT_PROMPT_MARKER = "You will receive multiple images.";
 
 function uid() {
@@ -90,7 +90,7 @@ async function optimizeImageForUpload(file: File): Promise<string> {
     const width = Math.max(1, Math.round(image.naturalWidth * scale));
     const height = Math.max(1, Math.round(image.naturalHeight * scale));
 
-    if (scale === 1 && file.size < 1_200_000) return originalDataUrl;
+    if (scale === 1 && file.size < 800_000) return originalDataUrl;
 
     const canvas = document.createElement("canvas");
     canvas.width = width;
