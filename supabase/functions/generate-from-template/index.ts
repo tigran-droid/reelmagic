@@ -9,7 +9,7 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const TEMPLATE_RECREATE_MODEL = "gemini-3.1-flash-image-preview";
+const TEMPLATE_RECREATE_MODEL = "gemini-3-pro-image-preview";
 const FOLLOW_UP_EDIT_MODEL = "gemini-2.5-flash-image";
 const MAX_IMAGE_BYTES = 360_000;
 const TEMPLATE_MAX_DIM = 640;
@@ -339,12 +339,14 @@ async function buildGeminiParts(body: Record<string, unknown>) {
       "You will receive multiple images.",
       "The FIRST attached image is the USER appearance reference and has priority for the main subject's face, hair, skin tone, age and recognizable look.",
       "The SECOND attached image is the TEMPLATE scene; use it for composition, framing, pose, lighting, color grading, wardrobe, background and overall style.",
+      "The user provided the appearance reference photo for this creation.",
       "Create the TEMPLATE scene with the main subject looking like the USER from Image 1.",
       "Do NOT keep the template person's face, hair, skin tone, age or identity.",
       "If the template person's appearance conflicts with the user photo, ignore the template person's appearance completely.",
       "Treat the template person as a pose/scene mannequin only.",
       "Do NOT copy the user's clothing, background, pose or lighting from Image 1; those come from Image 2.",
       "If any app note conflicts with these image roles, Image 1 remains the person and Image 2 remains the scene.",
+      "If the request is difficult, still return your best photorealistic image instead of a text explanation.",
       "Keep the result photorealistic, sharp and consistent with the template's camera and lens.",
       "Return exactly ONE final edited image.",
     ].join("\n");
