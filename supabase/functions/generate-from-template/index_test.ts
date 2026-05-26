@@ -142,7 +142,7 @@ Deno.test("keeps identity replacement rules when a template prompt is provided",
     assertStringIncludes(parts[3]?.text ?? "", "TEMPLATE SCENE ONLY");
     assertEquals(parts[4]?.inline_data?.data, "iVBORw==");
     assertStringIncludes(geminiUrl, "gemini-2.5-flash-image");
-    assertEquals(geminiRequestBody?.generationConfig?.responseModalities, ["IMAGE"]);
+    assertEquals(geminiRequestBody?.generationConfig?.responseModalities, ["TEXT", "IMAGE"]);
   } finally {
     fetchStub.restore();
     envStub.restore();
@@ -266,7 +266,7 @@ Deno.test("uses one provider call for follow-up edits", async () => {
           templateUrl: "https://example.com/template.png",
           userImages: ["data:image/png;base64,iVBORw0KGgo="],
           editImageDataUrl: "data:image/png;base64,iVBORw0KGgo=",
-          prompt: "change the girl position",
+          prompt: "nice chnge possition place",
         }),
       }),
     );

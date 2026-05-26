@@ -135,6 +135,13 @@ function isStructuralFollowUpEdit(prompt: unknown) {
   const text = prompt.toLowerCase();
   return [
     "position",
+    "possition",
+    "postion",
+    "posiiton",
+    "place",
+    "placement",
+    "location",
+    "reposition",
     "pose",
     "posing",
     "move",
@@ -406,7 +413,7 @@ async function callGemini(
       body: JSON.stringify({
         contents: [{ role: "user", parts: requestParts }],
         generationConfig: {
-          responseModalities: ["IMAGE"],
+          responseModalities: ["TEXT", "IMAGE"],
         },
       }),
       signal: controller.signal,
