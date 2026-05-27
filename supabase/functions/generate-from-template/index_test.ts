@@ -276,7 +276,7 @@ Deno.test("uses one provider call for follow-up edits", async () => {
 
     assertEquals(response.status, 200);
     assertEquals(modelUrls.length, 1);
-    assertStringIncludes(modelUrls[0], "gemini-2.5-flash-image");
+    assertStringIncludes(modelUrls[0], "gemini-3.1-flash-image-preview");
     assertStringIncludes(instruction, "STRUCTURAL edit");
     assertStringIncludes(instruction, "allowed to recreate the scene");
     assert(body.imageDataUrl);

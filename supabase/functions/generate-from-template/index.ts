@@ -10,7 +10,7 @@ const corsHeaders = {
 };
 
 const TEMPLATE_RECREATE_MODEL = "gemini-3.1-flash-image-preview";
-const FOLLOW_UP_EDIT_MODEL = "gemini-2.5-flash-image";
+const FOLLOW_UP_EDIT_MODEL = "gemini-3.1-flash-image-preview";
 const MAX_IMAGE_BYTES = 360_000;
 const TEMPLATE_MAX_DIM = 640;
 const USER_REF_MAX_DIM = 704;
