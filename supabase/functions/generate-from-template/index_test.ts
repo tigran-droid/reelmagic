@@ -133,15 +133,17 @@ Deno.test("keeps person and scene roles when a template prompt is provided", asy
 
     assertEquals(response.status, 200);
     assert(body.imageDataUrl);
-    assertEquals(parts.length, 5);
-    assertStringIncludes(instruction, "Use Image 1 as the person reference");
-    assertStringIncludes(instruction, "Use Image 2 as the scene template");
+    assertEquals(parts.length, 7);
+    assertStringIncludes(instruction, "Use Image 1 as the highest-priority identity reference");
+    assertStringIncludes(instruction, "Use Image 3 as the scene template");
     assertStringIncludes(instruction, "Do not create a collage");
     assertStringIncludes(instruction, "Make it cinematic and premium.");
-    assertStringIncludes(parts[1]?.text ?? "", "PERSON REFERENCE");
+    assertStringIncludes(parts[1]?.text ?? "", "PRIMARY FACE IDENTITY REFERENCE");
     assertEquals(parts[2]?.inline_data?.data, "dXNlci1waG90bw==");
-    assertStringIncludes(parts[3]?.text ?? "", "SCENE TEMPLATE");
-    assertEquals(parts[4]?.inline_data?.data, "iVBORw==");
+    assertStringIncludes(parts[3]?.text ?? "", "FULL USER REFERENCE");
+    assertEquals(parts[4]?.inline_data?.data, "dXNlci1waG90bw==");
+    assertStringIncludes(parts[5]?.text ?? "", "SCENE TEMPLATE");
+    assertEquals(parts[6]?.inline_data?.data, "iVBORw==");
     assertStringIncludes(geminiUrl, "gemini-2.5-flash-image");
     assertEquals(geminiRequestBody?.generationConfig?.responseModalities, ["IMAGE"]);
   } finally {

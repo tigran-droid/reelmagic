@@ -19,7 +19,7 @@ const EDIT_IMAGE_MAX_DIM = 576;
 const FUNCTION_BUDGET_MS = 360_000;
 const GEMINI_ATTEMPT_TIMEOUT_MS = 300_000;
 const MAX_USER_REFS = 1;
-const REQUEST_HASH_VERSION = "generate-from-template:user-first:v5";
+const REQUEST_HASH_VERSION = "generate-from-template:user-first:v6";
 const COMPLETED_JOB_CACHE_MS = 2 * 60 * 60 * 1000;
 const ACTIVE_JOB_REUSE_MS = 6 * 60 * 1000;
 
@@ -114,6 +114,36 @@ async function normalizeDataUrl(dataUrl: string, maxDim: number): Promise<string
 
     ctx.drawImage(bitmap, 0, 0, width, height);
     const out = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.76 });
+    const buf = new Uint8Array(await out.arrayBuffer());
+    let bin = "";
+    for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i]);
+    return `data:image/jpeg;base64,${btoa(bin)}`;
+  } catch {
+    return dataUrl;
+  }
+}
+
+async function createIdentityCropDataUrl(dataUrl: string): Promise<string> {
+  try {
+    const res = await fetch(dataUrl);
+    const blob = await res.blob();
+    const bitmap = await createImageBitmap(blob);
+    const cropSize = Math.min(bitmap.width, bitmap.height);
+    if (cropSize < 64) return dataUrl;
+
+    const sx = Math.max(0, Math.round((bitmap.width - cropSize) / 2));
+    const portraitYOffset = bitmap.height > bitmap.width
+      ? Math.round(bitmap.height * 0.04)
+      : Math.round((bitmap.height - cropSize) / 2);
+    const sy = Math.max(0, Math.min(bitmap.height - cropSize, portraitYOffset));
+    const outSize = Math.min(640, cropSize);
+
+    const canvas = new OffscreenCanvas(outSize, outSize);
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return dataUrl;
+
+    ctx.drawImage(bitmap, sx, sy, cropSize, cropSize, 0, 0, outSize, outSize);
+    const out = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.82 });
     const buf = new Uint8Array(await out.arrayBuffer());
     let bin = "";
     for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i]);
@@ -362,23 +392,34 @@ async function buildGeminiParts(body: Record<string, unknown>) {
         normalizeDataUrl(img, USER_REF_MAX_DIM),
       ),
     ]);
-    allImages = [...normalizedUserImages, templateDataUrl];
+    const identityCrops = await Promise.all(
+      normalizedUserImages.map((img) => createIdentityCropDataUrl(img)),
+    );
+    allImages = [...identityCrops, ...normalizedUserImages, templateDataUrl];
+    const templateImageNumber = allImages.length;
     imageLabels = [
+      ...identityCrops.map(
+        (_, index) =>
+          `IMAGE ${index + 1} - PRIMARY FACE IDENTITY REFERENCE. The final main subject must visibly match this face, hair, skin tone, age, and recognizable identity.`,
+      ),
       ...normalizedUserImages.map(
         (_, index) =>
-          `IMAGE ${index + 1} - PERSON REFERENCE. Use this person for the main subject's face, hair, skin tone, age, and recognizable appearance.`,
+          `IMAGE ${identityCrops.length + index + 1} - FULL USER REFERENCE. Use this only to support the same person's overall appearance.`,
       ),
-      `IMAGE ${normalizedUserImages.length + 1} - SCENE TEMPLATE. Use this image for the pose, body placement, clothing, background, lighting, camera angle, framing, and style.`,
+      `IMAGE ${templateImageNumber} - SCENE TEMPLATE. Use this image for the pose, body placement, clothing, background, lighting, camera angle, framing, and style. Do not use this person's face, hair, or identity.`,
     ];
 
     const BASE_TEMPLATE_INSTRUCTION = [
       "Create one photorealistic image by combining the attached references.",
-      "Use Image 1 as the person reference: the main subject should have this person's face, hair, skin tone, age, and recognizable appearance.",
-      "Use Image 2 as the scene template: keep its pose, body placement, outfit/clothing, background, lighting, camera angle, framing, and overall style.",
-      "Place the person from Image 1 naturally into the scene from Image 2 as the main subject.",
+      "Use Image 1 as the highest-priority identity reference: the final main subject must clearly have this face, hair, skin tone, age, and recognizable appearance.",
+      "Use Image 2 as the full user reference for the same person.",
+      `Use Image ${templateImageNumber} as the scene template: keep its pose, body placement, outfit/clothing, background, lighting, camera angle, framing, and overall style.`,
+      `Place the person from Image 1 naturally into the scene from Image ${templateImageNumber} as the main foreground subject.`,
+      `The person in Image ${templateImageNumber} is only a scene mannequin. Replace that person's face and hair with the identity from Image 1.`,
+      `If Image ${templateImageNumber} contains a face on a screen, poster, reflection, or secondary location, update it to match Image 1 too or keep it visually secondary.`,
       "Keep the composition clean and realistic, like a single camera photo.",
       "Do not create a collage, split-screen, poster, sticker sheet, travel overlay, decorative captions, extra scenes, or unrelated text.",
-      "If the two references conflict, Image 1 controls identity and Image 2 controls scene, clothing, pose, and background.",
+      `If the references conflict, Image 1 controls identity and Image ${templateImageNumber} controls scene, clothing, pose, and background.`,
       "Return exactly one complete photorealistic image.",
     ].join("\n");
 
@@ -387,7 +428,7 @@ async function buildGeminiParts(body: Record<string, unknown>) {
         ? [
             "Additional template notes from the app:",
             prompt.trim(),
-            "These notes can describe scene details, but Image 1 remains the person and Image 2 remains the scene template.",
+            `These notes can describe scene details, but Image 1 remains the person and Image ${templateImageNumber} remains the scene template.`,
           ].join("\n")
         : "";
 
