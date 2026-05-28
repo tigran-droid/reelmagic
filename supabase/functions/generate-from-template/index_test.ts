@@ -354,7 +354,9 @@ Deno.test("uses faster model for simple follow-up edits", async () => {
     assertEquals(response.status, 200);
     assertEquals(modelUrls.length, 1);
     assertStringIncludes(modelUrls[0], "gemini-2.5-flash-image");
-    assertStringIncludes(instruction, "Apply ONLY");
+    assertStringIncludes(instruction, "strict local edit request");
+    assertStringIncludes(instruction, "Do not add new backgrounds");
+    assertStringIncludes(instruction, "change only that visible clothing item");
     assert(body.imageDataUrl);
   } finally {
     fetchStub.restore();

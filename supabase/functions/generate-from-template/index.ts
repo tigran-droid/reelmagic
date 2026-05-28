@@ -19,7 +19,7 @@ const EDIT_IMAGE_MAX_DIM = 576;
 const FUNCTION_BUDGET_MS = 360_000;
 const GEMINI_ATTEMPT_TIMEOUT_MS = 300_000;
 const MAX_USER_REFS = 1;
-const REQUEST_HASH_VERSION = "generate-from-template:user-first:v3";
+const REQUEST_HASH_VERSION = "generate-from-template:user-first:v4";
 const COMPLETED_JOB_CACHE_MS = 2 * 60 * 60 * 1000;
 const ACTIVE_JOB_REUSE_MS = 6 * 60 * 1000;
 
@@ -297,7 +297,9 @@ async function buildGeminiParts(body: Record<string, unknown>) {
 
   if (isFollowUpEdit) {
     allImages = [await normalizeDataUrl(editImageDataUrl, EDIT_IMAGE_MAX_DIM)];
-    imageLabels = ["CURRENT CHAT IMAGE TO EDIT. This is the exact image that must be edited."];
+    imageLabels = [
+      "CURRENT CHAT IMAGE TO EDIT. This is the only source image. Preserve it unless the user explicitly asks to change a specific part.",
+    ];
     instruction = isStructuralEdit
       ? [
           "You will receive one already generated chat image.",
@@ -310,9 +312,14 @@ async function buildGeminiParts(body: Record<string, unknown>) {
         ].join("\n")
       : [
           "You will receive one already generated chat image.",
-          "Apply ONLY the user's requested local edit to this exact image.",
+          "This is a strict local edit request.",
+          "Edit ONLY the object or visual attribute explicitly named by the user.",
+          "Preserve every unedited part of the image as close to the input as possible.",
           "Do not recreate the scene from scratch.",
-          "Do not change the face, identity, hair, pose, background, camera angle, lighting, composition, or text unless the user explicitly asks.",
+          "Do not use or infer any previous template, reference photo, chat image, hidden image, or style outside the single attached image.",
+          "Do not add new backgrounds, travel scenes, collage elements, stickers, captions, decorative text, extra people, logos, or overlays.",
+          "Do not change the face, identity, hair, pose, body shape, background, camera angle, lighting, composition, or existing text unless the user explicitly asks.",
+          "If the user asks to change a dress, outfit, shirt, pants, or clothing, change only that visible clothing item and keep the person, pose, arena/background, screen, signs, and all other details unchanged.",
           `User edit request: ${prompt.trim()}`,
           "Return the full edited image.",
           "No explanation.",
