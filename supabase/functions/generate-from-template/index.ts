@@ -419,7 +419,7 @@ async function callGemini(
       body: JSON.stringify({
         contents: [{ role: "user", parts: requestParts }],
         generationConfig: {
-          responseModalities: ["TEXT", "IMAGE"],
+          responseModalities: ["IMAGE"],
         },
       }),
       signal: controller.signal,
