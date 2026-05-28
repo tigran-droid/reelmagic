@@ -141,7 +141,7 @@ Deno.test("keeps identity replacement rules when a template prompt is provided",
     assertEquals(parts[2]?.inline_data?.data, "dXNlci1waG90bw==");
     assertStringIncludes(parts[3]?.text ?? "", "TEMPLATE SCENE ONLY");
     assertEquals(parts[4]?.inline_data?.data, "iVBORw==");
-    assertStringIncludes(geminiUrl, "gemini-3.1-flash-image-preview");
+    assertStringIncludes(geminiUrl, "gemini-2.5-flash-image");
     assertEquals(geminiRequestBody?.generationConfig?.responseModalities, ["TEXT", "IMAGE"]);
   } finally {
     fetchStub.restore();
