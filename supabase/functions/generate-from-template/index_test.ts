@@ -209,7 +209,7 @@ Deno.test("does not call the provider twice when the response has no image", asy
   }
 });
 
-Deno.test("uses one provider call for follow-up edits", async () => {
+Deno.test("uses stronger model for structural follow-up edits", async () => {
   const originalEnvGet = Deno.env.get;
   const originalFetch = globalThis.fetch;
   const modelUrls: string[] = [];
@@ -279,6 +279,82 @@ Deno.test("uses one provider call for follow-up edits", async () => {
     assertStringIncludes(modelUrls[0], "gemini-3.1-flash-image-preview");
     assertStringIncludes(instruction, "STRUCTURAL edit");
     assertStringIncludes(instruction, "allowed to recreate the scene");
+    assert(body.imageDataUrl);
+  } finally {
+    fetchStub.restore();
+    envStub.restore();
+  }
+});
+
+Deno.test("uses faster model for simple follow-up edits", async () => {
+  const originalEnvGet = Deno.env.get;
+  const originalFetch = globalThis.fetch;
+  const modelUrls: string[] = [];
+  let geminiRequestBody:
+    | {
+        contents?: Array<{ parts?: Array<{ text?: string }> }>;
+      }
+    | undefined;
+
+  const envStub = stub(Deno.env, "get", (key: string) => {
+    if (key === "GOOGLE_GEMINI_API_KEY") return "test-key";
+    return originalEnvGet.call(Deno.env, key);
+  });
+
+  const fetchStub = stub(globalThis, "fetch", async (input: string | Request | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+
+    if (url.includes("generativelanguage.googleapis.com")) {
+      modelUrls.push(url);
+      geminiRequestBody = JSON.parse(String(init?.body));
+      return new Response(
+        JSON.stringify({
+          candidates: [
+            {
+              content: {
+                parts: [
+                  {
+                    inline_data: {
+                      mime_type: "image/png",
+                      data: "iVBORw0KGgo=",
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    return originalFetch(input, init);
+  });
+
+  try {
+    const response = await handleGenerateFromTemplateRequest(
+      new Request("http://localhost/generate-from-template", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          templateUrl: "https://example.com/template.png",
+          userImages: ["data:image/png;base64,iVBORw0KGgo="],
+          editImageDataUrl: "data:image/png;base64,iVBORw0KGgo=",
+          prompt: "change dress color",
+        }),
+      }),
+    );
+
+    const body = await response.json();
+    const instruction = geminiRequestBody?.contents?.[0]?.parts?.[0]?.text ?? "";
+
+    assertEquals(response.status, 200);
+    assertEquals(modelUrls.length, 1);
+    assertStringIncludes(modelUrls[0], "gemini-2.5-flash-image");
+    assertStringIncludes(instruction, "Apply ONLY");
     assert(body.imageDataUrl);
   } finally {
     fetchStub.restore();

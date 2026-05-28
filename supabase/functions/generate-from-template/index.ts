@@ -10,7 +10,8 @@ const corsHeaders = {
 };
 
 const TEMPLATE_RECREATE_MODEL = "gemini-3.1-flash-image-preview";
-const FOLLOW_UP_EDIT_MODEL = "gemini-3.1-flash-image-preview";
+const STRUCTURAL_FOLLOW_UP_EDIT_MODEL = "gemini-3.1-flash-image-preview";
+const SIMPLE_FOLLOW_UP_EDIT_MODEL = "gemini-2.5-flash-image";
 const MAX_IMAGE_BYTES = 360_000;
 const TEMPLATE_MAX_DIM = 640;
 const USER_REF_MAX_DIM = 704;
@@ -179,7 +180,10 @@ async function hashString(value: string) {
 }
 
 function getImageModelForBody(body: Record<string, unknown>) {
-  return isFollowUpEditBody(body) ? FOLLOW_UP_EDIT_MODEL : TEMPLATE_RECREATE_MODEL;
+  if (!isFollowUpEditBody(body)) return TEMPLATE_RECREATE_MODEL;
+  return isStructuralFollowUpEdit(body.prompt)
+    ? STRUCTURAL_FOLLOW_UP_EDIT_MODEL
+    : SIMPLE_FOLLOW_UP_EDIT_MODEL;
 }
 
 async function buildRequestHash(body: Record<string, unknown>, model: string) {
