@@ -19,7 +19,7 @@ const EDIT_IMAGE_MAX_DIM = 576;
 const FUNCTION_BUDGET_MS = 360_000;
 const GEMINI_ATTEMPT_TIMEOUT_MS = 300_000;
 const MAX_USER_REFS = 1;
-const REQUEST_HASH_VERSION = "generate-from-template:user-first:v4";
+const REQUEST_HASH_VERSION = "generate-from-template:user-first:v5";
 const COMPLETED_JOB_CACHE_MS = 2 * 60 * 60 * 1000;
 const ACTIVE_JOB_REUSE_MS = 6 * 60 * 1000;
 
@@ -60,6 +60,31 @@ function extractTextResponse(json: Record<string, unknown>): string {
     .filter(Boolean)
     .join("\n")
     .slice(0, 500);
+}
+
+function getNoImageDetail(json: Record<string, unknown>): string {
+  const promptFeedback = json?.promptFeedback as
+    | { blockReason?: unknown; blockReasonMessage?: unknown }
+    | undefined;
+  if (typeof promptFeedback?.blockReason === "string") {
+    const message =
+      typeof promptFeedback.blockReasonMessage === "string"
+        ? `: ${promptFeedback.blockReasonMessage}`
+        : "";
+    return ` Reason: Gemini blocked the prompt (${promptFeedback.blockReason}${message}).`;
+  }
+
+  const candidate = Array.isArray(json?.candidates) ? json.candidates[0] : undefined;
+  const finishReason =
+    candidate && typeof candidate === "object"
+      ? (candidate as { finishReason?: unknown }).finishReason
+      : undefined;
+  if (typeof finishReason === "string" && finishReason !== "STOP") {
+    return ` Reason: Gemini finished without an image (${finishReason}).`;
+  }
+
+  const text = extractTextResponse(json);
+  return text ? ` AI replied with text instead: ${text.slice(0, 220)}` : "";
 }
 
 async function urlToDataUrl(url: string): Promise<string> {
@@ -341,25 +366,20 @@ async function buildGeminiParts(body: Record<string, unknown>) {
     imageLabels = [
       ...normalizedUserImages.map(
         (_, index) =>
-          `IMAGE ${index + 1} - USER APPEARANCE REFERENCE. The final person must look like this uploaded user: face shape, eyes, nose, mouth, skin tone, age, hair color, hair texture and recognizable appearance.`,
+          `IMAGE ${index + 1} - PERSON REFERENCE. Use this person for the main subject's face, hair, skin tone, age, and recognizable appearance.`,
       ),
-      `IMAGE ${normalizedUserImages.length + 1} - TEMPLATE SCENE ONLY. Use only the pose, composition, body placement, clothing, background, lighting, camera angle and style. Do NOT use this person's face, hair, skin tone, age or identity.`,
+      `IMAGE ${normalizedUserImages.length + 1} - SCENE TEMPLATE. Use this image for the pose, body placement, clothing, background, lighting, camera angle, framing, and style.`,
     ];
 
     const BASE_TEMPLATE_INSTRUCTION = [
-      "You will receive multiple images.",
-      "The FIRST attached image is the USER appearance reference and has priority for the main subject's face, hair, skin tone, age and recognizable look.",
-      "The SECOND attached image is the TEMPLATE scene; use it for composition, framing, pose, lighting, color grading, wardrobe, background and overall style.",
-      "The user provided the appearance reference photo for this creation.",
-      "Create the TEMPLATE scene with the main subject looking like the USER from Image 1.",
-      "Do NOT keep the template person's face, hair, skin tone, age or identity.",
-      "If the template person's appearance conflicts with the user photo, ignore the template person's appearance completely.",
-      "Treat the template person as a pose/scene mannequin only.",
-      "Do NOT copy the user's clothing, background, pose or lighting from Image 1; those come from Image 2.",
-      "If any app note conflicts with these image roles, Image 1 remains the person and Image 2 remains the scene.",
-      "If the request is difficult, still return your best photorealistic image instead of a text explanation.",
-      "Keep the result photorealistic, sharp and consistent with the template's camera and lens.",
-      "Return exactly ONE final edited image.",
+      "Create one photorealistic image by combining the attached references.",
+      "Use Image 1 as the person reference: the main subject should have this person's face, hair, skin tone, age, and recognizable appearance.",
+      "Use Image 2 as the scene template: keep its pose, body placement, outfit/clothing, background, lighting, camera angle, framing, and overall style.",
+      "Place the person from Image 1 naturally into the scene from Image 2 as the main subject.",
+      "Keep the composition clean and realistic, like a single camera photo.",
+      "Do not create a collage, split-screen, poster, sticker sheet, travel overlay, decorative captions, extra scenes, or unrelated text.",
+      "If the two references conflict, Image 1 controls identity and Image 2 controls scene, clothing, pose, and background.",
+      "Return exactly one complete photorealistic image.",
     ].join("\n");
 
     const extraPrompt =
@@ -367,7 +387,7 @@ async function buildGeminiParts(body: Record<string, unknown>) {
         ? [
             "Additional template notes from the app:",
             prompt.trim(),
-            "These notes can describe the scene or style, but they must NOT override the identity replacement rules above.",
+            "These notes can describe scene details, but Image 1 remains the person and Image 2 remains the scene template.",
           ].join("\n")
         : "";
 
@@ -487,10 +507,8 @@ async function generateImage(body: Record<string, unknown>, geminiKey: string) {
 
   let imageDataUrl = extractImageDataUrl(result.json);
   if (!imageDataUrl) {
-    const modelText = extractTextResponse(result.json) || result.modelText || "";
-    const detail = modelText
-      ? ` AI replied with text instead: ${modelText.slice(0, 220)}`
-      : "";
+    const detail = getNoImageDetail(result.json) ||
+      (result.modelText ? ` AI replied with text instead: ${result.modelText.slice(0, 220)}` : "");
     return {
       error: `The image editor did not return an image.${detail}`,
       errorCode: "AI_IMAGE_EDIT_NO_OUTPUT",

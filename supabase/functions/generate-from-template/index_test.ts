@@ -53,7 +53,7 @@ Deno.test("returns fallback JSON when provider omits image data", async () => {
   }
 });
 
-Deno.test("keeps identity replacement rules when a template prompt is provided", async () => {
+Deno.test("keeps person and scene roles when a template prompt is provided", async () => {
   const originalEnvGet = Deno.env.get;
   const originalFetch = globalThis.fetch;
   let geminiRequestBody:
@@ -134,12 +134,13 @@ Deno.test("keeps identity replacement rules when a template prompt is provided",
     assertEquals(response.status, 200);
     assert(body.imageDataUrl);
     assertEquals(parts.length, 5);
-    assertStringIncludes(instruction, "FIRST attached image is the USER appearance reference");
-    assertStringIncludes(instruction, "SECOND attached image is the TEMPLATE scene");
+    assertStringIncludes(instruction, "Use Image 1 as the person reference");
+    assertStringIncludes(instruction, "Use Image 2 as the scene template");
+    assertStringIncludes(instruction, "Do not create a collage");
     assertStringIncludes(instruction, "Make it cinematic and premium.");
-    assertStringIncludes(parts[1]?.text ?? "", "USER APPEARANCE REFERENCE");
+    assertStringIncludes(parts[1]?.text ?? "", "PERSON REFERENCE");
     assertEquals(parts[2]?.inline_data?.data, "dXNlci1waG90bw==");
-    assertStringIncludes(parts[3]?.text ?? "", "TEMPLATE SCENE ONLY");
+    assertStringIncludes(parts[3]?.text ?? "", "SCENE TEMPLATE");
     assertEquals(parts[4]?.inline_data?.data, "iVBORw==");
     assertStringIncludes(geminiUrl, "gemini-2.5-flash-image");
     assertEquals(geminiRequestBody?.generationConfig?.responseModalities, ["IMAGE"]);
