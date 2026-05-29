@@ -144,7 +144,7 @@ Deno.test("keeps person and scene roles when a template prompt is provided", asy
     assertEquals(parts[4]?.inline_data?.data, "dXNlci1waG90bw==");
     assertStringIncludes(parts[5]?.text ?? "", "SCENE TEMPLATE");
     assertEquals(parts[6]?.inline_data?.data, "iVBORw==");
-    assertStringIncludes(geminiUrl, "gemini-2.5-flash-image");
+    assertStringIncludes(geminiUrl, "gemini-3.1-flash-image");
     assertEquals(geminiRequestBody?.generationConfig?.responseModalities, ["IMAGE"]);
   } finally {
     fetchStub.restore();
@@ -212,7 +212,7 @@ Deno.test("does not call the provider twice when the response has no image", asy
   }
 });
 
-Deno.test("uses stronger model for structural follow-up edits", async () => {
+Deno.test("uses the shared image model for structural follow-up edits", async () => {
   const originalEnvGet = Deno.env.get;
   const originalFetch = globalThis.fetch;
   const modelUrls: string[] = [];
@@ -279,7 +279,7 @@ Deno.test("uses stronger model for structural follow-up edits", async () => {
 
     assertEquals(response.status, 200);
     assertEquals(modelUrls.length, 1);
-    assertStringIncludes(modelUrls[0], "gemini-3.1-flash-image-preview");
+    assertStringIncludes(modelUrls[0], "gemini-3.1-flash-image");
     assertStringIncludes(instruction, "STRUCTURAL edit");
     assertStringIncludes(instruction, "allowed to recreate the scene");
     assert(body.imageDataUrl);
@@ -289,7 +289,7 @@ Deno.test("uses stronger model for structural follow-up edits", async () => {
   }
 });
 
-Deno.test("uses faster model for simple follow-up edits", async () => {
+Deno.test("uses the shared image model for simple follow-up edits", async () => {
   const originalEnvGet = Deno.env.get;
   const originalFetch = globalThis.fetch;
   const modelUrls: string[] = [];
@@ -356,7 +356,7 @@ Deno.test("uses faster model for simple follow-up edits", async () => {
 
     assertEquals(response.status, 200);
     assertEquals(modelUrls.length, 1);
-    assertStringIncludes(modelUrls[0], "gemini-2.5-flash-image");
+    assertStringIncludes(modelUrls[0], "gemini-3.1-flash-image");
     assertStringIncludes(instruction, "strict local edit request");
     assertStringIncludes(instruction, "Do not add new backgrounds");
     assertStringIncludes(instruction, "change only that visible clothing item");
