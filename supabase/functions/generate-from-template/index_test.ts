@@ -133,17 +133,15 @@ Deno.test("keeps person and scene roles when a template prompt is provided", asy
 
     assertEquals(response.status, 200);
     assert(body.imageDataUrl);
-    assertEquals(parts.length, 7);
+    assertEquals(parts.length, 5);
     assertStringIncludes(instruction, "Use Image 1 only as the scene template");
-    assertStringIncludes(instruction, "Use Image 3 as the final identity lock");
+    assertStringIncludes(instruction, "Use Image 2 as the only identity reference");
     assertStringIncludes(instruction, "Do not create a collage");
     assertStringIncludes(instruction, "Make it cinematic and premium.");
     assertStringIncludes(parts[1]?.text ?? "", "SCENE TEMPLATE ONLY");
     assertEquals(parts[2]?.inline_data?.data, "iVBORw==");
-    assertStringIncludes(parts[3]?.text ?? "", "FULL USER IDENTITY REFERENCE");
+    assertStringIncludes(parts[3]?.text ?? "", "FINAL IDENTITY LOCK");
     assertEquals(parts[4]?.inline_data?.data, "dXNlci1waG90bw==");
-    assertStringIncludes(parts[5]?.text ?? "", "FINAL IDENTITY LOCK");
-    assertEquals(parts[6]?.inline_data?.data, "dXNlci1waG90bw==");
     assertStringIncludes(geminiUrl, "gemini-3.1-flash-image");
     assertEquals(geminiRequestBody?.generationConfig?.responseModalities, ["IMAGE"]);
   } finally {

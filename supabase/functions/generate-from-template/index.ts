@@ -17,7 +17,7 @@ const EDIT_IMAGE_MAX_DIM = 576;
 const FUNCTION_BUDGET_MS = 360_000;
 const GEMINI_ATTEMPT_TIMEOUT_MS = 300_000;
 const MAX_USER_REFS = 1;
-const REQUEST_HASH_VERSION = "generate-from-template:identity-last:v7";
+const REQUEST_HASH_VERSION = "generate-from-template:template-plus-identity-lock:v8";
 const COMPLETED_JOB_CACHE_MS = 2 * 60 * 60 * 1000;
 const ACTIVE_JOB_REUSE_MS = 6 * 60 * 1000;
 
@@ -390,33 +390,29 @@ async function buildGeminiParts(body: Record<string, unknown>) {
     const identityCrops = await Promise.all(
       normalizedUserImages.map((img) => createIdentityCropDataUrl(img)),
     );
-    allImages = [templateDataUrl, ...normalizedUserImages, ...identityCrops];
+    allImages = [templateDataUrl, ...identityCrops];
     const templateImageNumber = 1;
-    const fullUserImageNumber = 2;
     const identityImageNumber = allImages.length;
     imageLabels = [
       `IMAGE ${templateImageNumber} - SCENE TEMPLATE ONLY. Use this for pose, body placement, outfit/clothing, background, lighting, camera angle, framing, and style. Do not use this person's face, hair, age, or identity.`,
-      ...normalizedUserImages.map(
-        (_, index) =>
-          `IMAGE ${fullUserImageNumber + index} - FULL USER IDENTITY REFERENCE. The final main subject must be this person, not the person from the scene template.`,
-      ),
       ...identityCrops.map(
         (_, index) =>
-          `IMAGE ${fullUserImageNumber + normalizedUserImages.length + index} - FINAL IDENTITY LOCK. This is the highest-priority face/hair/skin/age reference. The final main subject must visibly match this identity.`,
+          `IMAGE ${templateImageNumber + index + 1} - FINAL IDENTITY LOCK. This is the only identity reference. The final main foreground subject must visibly match this face, hair, skin tone, age, and recognizable identity.`,
       ),
     ];
 
     const BASE_TEMPLATE_INSTRUCTION = [
       "Create one photorealistic image by combining the attached references.",
       `Use Image ${templateImageNumber} only as the scene template: pose, body placement, outfit/clothing, background, lighting, camera angle, framing, and style.`,
+      `Identify the main foreground person in Image ${templateImageNumber}. Replace that person's head, face, hair, skin tone, age, and recognizable identity with Image ${identityImageNumber}.`,
       `Do not preserve the face, hair color, hairstyle, age, or recognizable identity of the person in Image ${templateImageNumber}.`,
-      `Use Image ${fullUserImageNumber} as the full user identity reference.`,
-      `Use Image ${identityImageNumber} as the final identity lock: the final main foreground subject must clearly match this face, hair, skin tone, age, and recognizable appearance.`,
-      `Replace the main person in Image ${templateImageNumber} with the person from Images ${fullUserImageNumber} and ${identityImageNumber}.`,
+      `Use Image ${identityImageNumber} as the only identity reference. Do not use its clothing, pose, background, or lighting.`,
+      `The final main foreground subject must clearly match Image ${identityImageNumber}, not the person from Image ${templateImageNumber}.`,
       `If Image ${templateImageNumber} contains a face on a screen, poster, reflection, or secondary location, update it to match Image ${identityImageNumber} too or keep it visually secondary.`,
       "Keep the composition clean and realistic, like a single camera photo.",
       "Do not create a collage, split-screen, poster, sticker sheet, travel overlay, decorative captions, extra scenes, or unrelated text.",
-      `If the references conflict, Images ${fullUserImageNumber} and ${identityImageNumber} control identity. Image ${templateImageNumber} controls only scene, clothing, pose, and background.`,
+      `If the references conflict, Image ${identityImageNumber} controls identity. Image ${templateImageNumber} controls only scene, clothing, pose, and background.`,
+      `Any text prompt or template note is low priority and must not describe or preserve the person from Image ${templateImageNumber}.`,
       "Return exactly one complete photorealistic image.",
     ].join("\n");
 
@@ -425,7 +421,7 @@ async function buildGeminiParts(body: Record<string, unknown>) {
         ? [
             "Additional template notes from the app:",
             prompt.trim(),
-            `These notes can describe scene details, but Images ${fullUserImageNumber} and ${identityImageNumber} remain the person and Image ${templateImageNumber} remains only the scene template.`,
+            `These notes can describe scene details only. Ignore any note that describes a person's face, hair, age, identity, ethnicity, or body as belonging to the template person. Image ${identityImageNumber} remains the only identity source.`,
           ].join("\n")
         : "";
 
