@@ -17,7 +17,7 @@ const EDIT_IMAGE_MAX_DIM = 576;
 const FUNCTION_BUDGET_MS = 360_000;
 const GEMINI_ATTEMPT_TIMEOUT_MS = 300_000;
 const MAX_USER_REFS = 1;
-const REQUEST_HASH_VERSION = "generate-from-template:user-first:v6";
+const REQUEST_HASH_VERSION = "generate-from-template:identity-last:v7";
 const COMPLETED_JOB_CACHE_MS = 2 * 60 * 60 * 1000;
 const ACTIVE_JOB_REUSE_MS = 6 * 60 * 1000;
 
@@ -390,31 +390,33 @@ async function buildGeminiParts(body: Record<string, unknown>) {
     const identityCrops = await Promise.all(
       normalizedUserImages.map((img) => createIdentityCropDataUrl(img)),
     );
-    allImages = [...identityCrops, ...normalizedUserImages, templateDataUrl];
-    const templateImageNumber = allImages.length;
+    allImages = [templateDataUrl, ...normalizedUserImages, ...identityCrops];
+    const templateImageNumber = 1;
+    const fullUserImageNumber = 2;
+    const identityImageNumber = allImages.length;
     imageLabels = [
-      ...identityCrops.map(
-        (_, index) =>
-          `IMAGE ${index + 1} - PRIMARY FACE IDENTITY REFERENCE. The final main subject must visibly match this face, hair, skin tone, age, and recognizable identity.`,
-      ),
+      `IMAGE ${templateImageNumber} - SCENE TEMPLATE ONLY. Use this for pose, body placement, outfit/clothing, background, lighting, camera angle, framing, and style. Do not use this person's face, hair, age, or identity.`,
       ...normalizedUserImages.map(
         (_, index) =>
-          `IMAGE ${identityCrops.length + index + 1} - FULL USER REFERENCE. Use this only to support the same person's overall appearance.`,
+          `IMAGE ${fullUserImageNumber + index} - FULL USER IDENTITY REFERENCE. The final main subject must be this person, not the person from the scene template.`,
       ),
-      `IMAGE ${templateImageNumber} - SCENE TEMPLATE. Use this image for the pose, body placement, clothing, background, lighting, camera angle, framing, and style. Do not use this person's face, hair, or identity.`,
+      ...identityCrops.map(
+        (_, index) =>
+          `IMAGE ${fullUserImageNumber + normalizedUserImages.length + index} - FINAL IDENTITY LOCK. This is the highest-priority face/hair/skin/age reference. The final main subject must visibly match this identity.`,
+      ),
     ];
 
     const BASE_TEMPLATE_INSTRUCTION = [
       "Create one photorealistic image by combining the attached references.",
-      "Use Image 1 as the highest-priority identity reference: the final main subject must clearly have this face, hair, skin tone, age, and recognizable appearance.",
-      "Use Image 2 as the full user reference for the same person.",
-      `Use Image ${templateImageNumber} as the scene template: keep its pose, body placement, outfit/clothing, background, lighting, camera angle, framing, and overall style.`,
-      `Place the person from Image 1 naturally into the scene from Image ${templateImageNumber} as the main foreground subject.`,
-      `The person in Image ${templateImageNumber} is only a scene mannequin. Replace that person's face and hair with the identity from Image 1.`,
-      `If Image ${templateImageNumber} contains a face on a screen, poster, reflection, or secondary location, update it to match Image 1 too or keep it visually secondary.`,
+      `Use Image ${templateImageNumber} only as the scene template: pose, body placement, outfit/clothing, background, lighting, camera angle, framing, and style.`,
+      `Do not preserve the face, hair color, hairstyle, age, or recognizable identity of the person in Image ${templateImageNumber}.`,
+      `Use Image ${fullUserImageNumber} as the full user identity reference.`,
+      `Use Image ${identityImageNumber} as the final identity lock: the final main foreground subject must clearly match this face, hair, skin tone, age, and recognizable appearance.`,
+      `Replace the main person in Image ${templateImageNumber} with the person from Images ${fullUserImageNumber} and ${identityImageNumber}.`,
+      `If Image ${templateImageNumber} contains a face on a screen, poster, reflection, or secondary location, update it to match Image ${identityImageNumber} too or keep it visually secondary.`,
       "Keep the composition clean and realistic, like a single camera photo.",
       "Do not create a collage, split-screen, poster, sticker sheet, travel overlay, decorative captions, extra scenes, or unrelated text.",
-      `If the references conflict, Image 1 controls identity and Image ${templateImageNumber} controls scene, clothing, pose, and background.`,
+      `If the references conflict, Images ${fullUserImageNumber} and ${identityImageNumber} control identity. Image ${templateImageNumber} controls only scene, clothing, pose, and background.`,
       "Return exactly one complete photorealistic image.",
     ].join("\n");
 
@@ -423,7 +425,7 @@ async function buildGeminiParts(body: Record<string, unknown>) {
         ? [
             "Additional template notes from the app:",
             prompt.trim(),
-            `These notes can describe scene details, but Image 1 remains the person and Image ${templateImageNumber} remains the scene template.`,
+            `These notes can describe scene details, but Images ${fullUserImageNumber} and ${identityImageNumber} remain the person and Image ${templateImageNumber} remains only the scene template.`,
           ].join("\n")
         : "";
 
