@@ -17,7 +17,7 @@ const EDIT_IMAGE_MAX_DIM = 576;
 const FUNCTION_BUDGET_MS = 360_000;
 const GEMINI_ATTEMPT_TIMEOUT_MS = 300_000;
 const MAX_USER_REFS = 1;
-const REQUEST_HASH_VERSION = "generate-from-template:template-plus-identity-lock:v8";
+const REQUEST_HASH_VERSION = "generate-from-template:preserve-follow-up-subject:v9";
 const COMPLETED_JOB_CACHE_MS = 2 * 60 * 60 * 1000;
 const ACTIVE_JOB_REUSE_MS = 6 * 60 * 1000;
 
@@ -354,9 +354,14 @@ async function buildGeminiParts(body: Record<string, unknown>) {
       ? [
           "You will receive one already generated chat image.",
           "This request is a STRUCTURAL edit: the user is asking to change pose, position, movement, camera angle, or composition.",
-          "Create a new full image based on the current chat image and clearly apply the requested structural change.",
-          "It is allowed to recreate the scene as needed to satisfy the requested position or pose change.",
-          "Preserve the same person, face identity, hair, outfit style, general setting, lighting, color grading, and photorealistic quality unless the user explicitly asks otherwise.",
+          "Create a new full image based on the current chat image and clearly apply the requested structural change to the same main person.",
+          "The main foreground person from the input image must remain visible, recognizable, and important in the final image.",
+          "Do not remove, erase, hide, crop out, replace, shrink into the background, or turn the main person into a secondary detail.",
+          "If the user asks to change position, placement, pose, or camera angle, move or repose that same person while preserving their face identity, hair, outfit style, body, and role as the main subject.",
+          "Redraw only the minimum surrounding pixels needed for the requested structural edit.",
+          "Never output an empty scene, background-only image, or arena/location without the main person.",
+          "If the request is ambiguous, make a small clear pose or placement adjustment and keep everything else close to the input.",
+          "Preserve the same general setting, lighting, color grading, photorealistic quality, screen/sign details, and overall composition unless the user explicitly asks otherwise.",
           "Do not return a text explanation. Return exactly one final image.",
           `User edit request: ${prompt.trim()}`,
         ].join("\n")

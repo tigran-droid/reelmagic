@@ -279,7 +279,10 @@ Deno.test("uses the shared image model for structural follow-up edits", async ()
     assertEquals(modelUrls.length, 1);
     assertStringIncludes(modelUrls[0], "gemini-3.1-flash-image");
     assertStringIncludes(instruction, "STRUCTURAL edit");
-    assertStringIncludes(instruction, "allowed to recreate the scene");
+    assertStringIncludes(instruction, "main foreground person from the input image must remain visible");
+    assertStringIncludes(instruction, "Do not remove, erase, hide, crop out, replace");
+    assertStringIncludes(instruction, "move or repose that same person");
+    assertStringIncludes(instruction, "Never output an empty scene");
     assert(body.imageDataUrl);
   } finally {
     fetchStub.restore();
