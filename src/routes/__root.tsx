@@ -82,12 +82,20 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:description", content: "Create glam, cinematic, anime, and retro AI reels from your photos." },
       { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/1a47270d-7dc1-4082-b042-73bb5b1abbab/id-preview-95624ff6--46d3f445-52cf-4410-974c-debe38553913.lovable.app-1779102263527.png" },
       { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/1a47270d-7dc1-4082-b042-73bb5b1abbab/id-preview-95624ff6--46d3f445-52cf-4410-974c-debe38553913.lovable.app-1779102263527.png" },
+      // PWA
+      { name: "mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
+      { name: "apple-mobile-web-app-title", content: "Magic Studio" },
+      { name: "theme-color", content: "#0a0a0a" },
     ],
     links: [
       {
         rel: "stylesheet",
         href: appCss,
       },
+      { rel: "manifest", href: "/manifest.json" },
+      { rel: "apple-touch-icon", href: "/icon-512.png" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {

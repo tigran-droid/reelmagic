@@ -57,7 +57,7 @@ function Categories() {
     <MobileFrame>
       {/* Header */}
       <header className="sticky top-0 z-30 bg-background/80 backdrop-blur-xl">
-        <div className="pt-12 pb-3 px-6 flex justify-between items-center">
+        <div className="pt-12 md:pt-8 pb-3 px-6 flex justify-between items-center">
           <div>
             <span className="text-[10px] font-bold tracking-[0.3em] text-muted-foreground uppercase block mb-0.5">
               Videos
@@ -131,7 +131,7 @@ function Categories() {
                 All <ChevronRight className="size-3" strokeWidth={3} />
               </button>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
               {videos.slice(1).map((v) => (
                 <button
                   key={v.id}

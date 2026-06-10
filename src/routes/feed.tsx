@@ -327,86 +327,234 @@ function Feed() {
         onChange={onPickUserPhotos}
         className="hidden"
       />
-      <div
-        ref={scrollerRef}
-        key={tab}
-        onScroll={handleScroll}
-        className="h-dvh overflow-y-scroll snap-y snap-mandatory no-scrollbar"
-      >
-        {reels.map((r, i) => (
-          <ReelCard
-            key={`${r.cover}-${i}`}
-            reel={r}
-            eager={i === 0}
-            visible={Math.abs(i - activeIndex) <= 1}
-            active={i === activeIndex}
-            needsTap={needsTapIndex === i}
-            onToggleAudio={() => handleToggleAudio(i)}
-          >
-            <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-black/50" />
 
-            {/* Top tabs */}
-            <div className="absolute top-14 left-0 right-0 flex justify-center gap-8 text-sm font-semibold">
-              {(["global", "regional"] as const).map((t) => (
-                <button
-                  key={t}
-                  onClick={() => setTab(t)}
-                  className={`relative capitalize ${tab === t ? "text-white" : "text-white/60"}`}
+      {/* ── Desktop feed layout ── */}
+      <div className="hidden md:flex h-screen items-stretch">
+        {/* Centered reel column */}
+        <div className="flex-1 flex items-center justify-center bg-black/95 relative overflow-hidden">
+          {/* Tab switcher */}
+          <div className="absolute top-6 left-0 right-0 flex justify-center gap-8 text-sm font-semibold z-20">
+            {(["global", "regional"] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => setTab(t)}
+                className={`relative capitalize transition-colors ${tab === t ? "text-white" : "text-white/50 hover:text-white/80"}`}
+              >
+                {t}
+                {tab === t && (
+                  <div className="absolute -bottom-2 inset-x-2 h-0.5 bg-white rounded-full" />
+                )}
+              </button>
+            ))}
+          </div>
+
+          {/* Reel viewer */}
+          <div className="relative w-[360px] h-[640px] rounded-2xl overflow-hidden shadow-2xl ring-1 ring-white/10">
+            <div
+              ref={scrollerRef}
+              key={tab}
+              onScroll={handleScroll}
+              className="h-full overflow-y-scroll snap-y snap-mandatory no-scrollbar"
+            >
+              {reels.map((r, i) => (
+                <ReelCard
+                  key={`${r.cover}-${i}`}
+                  reel={r}
+                  eager={i === 0}
+                  visible={Math.abs(i - activeIndex) <= 1}
+                  active={i === activeIndex}
+                  needsTap={needsTapIndex === i}
+                  onToggleAudio={() => handleToggleAudio(i)}
                 >
-                  {t}
-                  {tab === t && (
-                    <div className="absolute -bottom-2 inset-x-2 h-0.5 bg-white rounded-full" />
-                  )}
-                </button>
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-black/40" />
+                  <div className="absolute bottom-6 left-4 right-4 space-y-2 text-white">
+                    <p className="text-[15px] font-bold leading-tight drop-shadow">{r.title}</p>
+                    <div className="flex flex-wrap gap-x-1.5 gap-y-1 text-[10px] font-medium text-white/75">
+                      {r.hashtags.map((h) => <span key={h}>{h}</span>)}
+                    </div>
+                    <div className="flex items-center gap-2 pt-1">
+                      <span className="text-[10px] text-white/70 truncate">♪ {r.song}</span>
+                      <img src={r.cover} alt="" className="size-7 rounded-full object-cover border border-white/30 shrink-0 animate-[spin_5s_linear_infinite]" />
+                    </div>
+                  </div>
+                </ReelCard>
               ))}
             </div>
 
-            {/* Right action rail — grouped tight */}
-            <div className="absolute right-3 bottom-44 flex flex-col items-center gap-4 text-white">
-              <Action icon={<Heart className="size-7" fill="white" />} label={r.likes} />
-              <Action icon={<MessageCircle className="size-7" />} label={r.comments} />
-              <Action icon={<Send className="size-7" />} label="Share" />
-              <Action icon={<Bookmark className="size-7" />} label="Save" />
-            </div>
+            {/* Prev / Next arrows */}
+            <button
+              onClick={() => { setActiveIndex(Math.max(0, activeIndex - 1)); scrollerRef.current?.scrollTo({ top: (activeIndex - 1) * (scrollerRef.current?.clientHeight ?? 0), behavior: "smooth" }); }}
+              className="absolute top-1/2 -translate-y-1/2 -left-12 size-9 rounded-full bg-white/10 hover:bg-white/20 border border-white/10 text-white flex items-center justify-center transition-colors disabled:opacity-30"
+              disabled={activeIndex === 0}
+            >
+              ↑
+            </button>
+            <button
+              onClick={() => { const next = Math.min(reels.length - 1, activeIndex + 1); setActiveIndex(next); scrollerRef.current?.scrollTo({ top: next * (scrollerRef.current?.clientHeight ?? 0), behavior: "smooth" }); }}
+              className="absolute top-1/2 -translate-y-1/2 -right-12 size-9 rounded-full bg-white/10 hover:bg-white/20 border border-white/10 text-white flex items-center justify-center transition-colors disabled:opacity-30"
+              disabled={activeIndex === reels.length - 1}
+            >
+              ↓
+            </button>
+          </div>
+        </div>
 
-            {/* Bottom info block */}
-            <div className="absolute bottom-28 left-0 right-0 px-5 space-y-3 text-white">
-              <p className="text-[17px] font-semibold leading-tight tracking-tight drop-shadow">
-                {r.title}
-              </p>
-              <div className="flex flex-wrap gap-x-2 gap-y-1 text-xs font-medium text-white/85">
-                {r.hashtags.map((h) => (
-                  <span key={h}>{h}</span>
+        {/* Right panel — actions + info */}
+        <div className="w-72 shrink-0 bg-background border-l border-border flex flex-col overflow-y-auto">
+          {activeReel ? (
+            <>
+              <div className="p-5 border-b border-border">
+                <h2 className="text-base font-extrabold leading-tight">{activeReel.title}</h2>
+                <p className="text-xs text-muted-foreground mt-1">♪ {activeReel.song}</p>
+                <div className="flex flex-wrap gap-1.5 mt-3">
+                  {activeReel.hashtags.map((h) => (
+                    <span key={h} className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-secondary border border-border text-muted-foreground">
+                      {h}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Stats */}
+              <div className="grid grid-cols-2 gap-px bg-border">
+                {[
+                  { icon: <Heart className="size-4" />, label: "Likes", value: activeReel.likes },
+                  { icon: <MessageCircle className="size-4" />, label: "Comments", value: activeReel.comments },
+                ].map(({ icon, label, value }) => (
+                  <div key={label} className="bg-background px-4 py-3 flex items-center gap-2">
+                    <span className="text-muted-foreground">{icon}</span>
+                    <div>
+                      <div className="text-sm font-bold">{value}</div>
+                      <div className="text-[10px] text-muted-foreground">{label}</div>
+                    </div>
+                  </div>
                 ))}
               </div>
 
-              <div className="flex items-center justify-between gap-3 pt-1.5">
+              {/* Actions */}
+              <div className="p-4 space-y-2">
                 <button
                   type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    startCreate(r);
-                  }}
-                  className="inline-flex items-center gap-2 pl-4 pr-5 py-2.5 rounded-2xl bg-white text-black text-sm font-semibold shadow-lg shadow-black/20 active:scale-95 transition-transform"
+                  onClick={() => startCreate(activeReel)}
+                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-brand text-white text-sm font-bold shadow-lg shadow-brand/20 hover:bg-brand/90 transition-colors"
                 >
                   <Sparkles className="size-4" />
                   Create yours
                 </button>
-
-                <div className="flex items-center gap-2 min-w-0 max-w-[55%]">
-                  <span className="text-[11px] text-white/85 truncate animate-[pulse_1.6s_ease-in-out_infinite]">
-                    ♪ {r.song}
-                  </span>
-                  <img
-                    src={r.cover}
-                    alt=""
-                    className="size-9 rounded-full object-cover border border-white/30 shadow-md shadow-black/30 shrink-0 animate-[spin_5s_linear_infinite]"
-                  />
+                <div className="grid grid-cols-2 gap-2">
+                  <button className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-secondary border border-border text-sm font-semibold text-foreground hover:bg-secondary/80 transition-colors">
+                    <Send className="size-3.5" /> Share
+                  </button>
+                  <button className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-secondary border border-border text-sm font-semibold text-foreground hover:bg-secondary/80 transition-colors">
+                    <Bookmark className="size-3.5" /> Save
+                  </button>
                 </div>
               </div>
-            </div>
-          </ReelCard>
-        ))}
+
+              {/* Reel thumbnails */}
+              <div className="px-4 pb-4">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">More reels</p>
+                <div className="space-y-2">
+                  {reels.map((r, i) => (
+                    <button
+                      key={i}
+                      onClick={() => { setActiveIndex(i); scrollerRef.current?.scrollTo({ top: i * (scrollerRef.current?.clientHeight ?? 0), behavior: "smooth" }); }}
+                      className={`w-full flex items-center gap-3 p-2 rounded-lg transition-colors text-left ${i === activeIndex ? "bg-secondary ring-1 ring-border" : "hover:bg-secondary/50"}`}
+                    >
+                      <img src={r.cover} alt={r.title} className="size-10 rounded-md object-cover shrink-0" />
+                      <div className="min-w-0">
+                        <div className="text-xs font-semibold truncate">{r.title}</div>
+                        <div className="text-[10px] text-muted-foreground truncate">{r.likes} likes</div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
+          ) : null}
+        </div>
+      </div>
+
+      {/* ── Mobile feed layout ── */}
+      <div className="md:hidden">
+        <div
+          ref={scrollerRef}
+          key={tab}
+          onScroll={handleScroll}
+          className="h-dvh overflow-y-scroll snap-y snap-mandatory no-scrollbar"
+        >
+          {reels.map((r, i) => (
+            <ReelCard
+              key={`${r.cover}-${i}`}
+              reel={r}
+              eager={i === 0}
+              visible={Math.abs(i - activeIndex) <= 1}
+              active={i === activeIndex}
+              needsTap={needsTapIndex === i}
+              onToggleAudio={() => handleToggleAudio(i)}
+            >
+              <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-black/50" />
+
+              <div className="absolute top-14 left-0 right-0 flex justify-center gap-8 text-sm font-semibold">
+                {(["global", "regional"] as const).map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => setTab(t)}
+                    className={`relative capitalize ${tab === t ? "text-white" : "text-white/60"}`}
+                  >
+                    {t}
+                    {tab === t && (
+                      <div className="absolute -bottom-2 inset-x-2 h-0.5 bg-white rounded-full" />
+                    )}
+                  </button>
+                ))}
+              </div>
+
+              <div className="absolute right-3 bottom-44 flex flex-col items-center gap-4 text-white">
+                <Action icon={<Heart className="size-7" fill="white" />} label={r.likes} />
+                <Action icon={<MessageCircle className="size-7" />} label={r.comments} />
+                <Action icon={<Send className="size-7" />} label="Share" />
+                <Action icon={<Bookmark className="size-7" />} label="Save" />
+              </div>
+
+              <div className="absolute bottom-28 left-0 right-0 px-5 space-y-3 text-white">
+                <p className="text-[17px] font-semibold leading-tight tracking-tight drop-shadow">
+                  {r.title}
+                </p>
+                <div className="flex flex-wrap gap-x-2 gap-y-1 text-xs font-medium text-white/85">
+                  {r.hashtags.map((h) => (
+                    <span key={h}>{h}</span>
+                  ))}
+                </div>
+
+                <div className="flex items-center justify-between gap-3 pt-1.5">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      startCreate(r);
+                    }}
+                    className="inline-flex items-center gap-2 pl-4 pr-5 py-2.5 rounded-2xl bg-white text-black text-sm font-semibold shadow-lg shadow-black/20 active:scale-95 transition-transform"
+                  >
+                    <Sparkles className="size-4" />
+                    Create yours
+                  </button>
+
+                  <div className="flex items-center gap-2 min-w-0 max-w-[55%]">
+                    <span className="text-[11px] text-white/85 truncate animate-[pulse_1.6s_ease-in-out_infinite]">
+                      ♪ {r.song}
+                    </span>
+                    <img
+                      src={r.cover}
+                      alt=""
+                      className="size-9 rounded-full object-cover border border-white/30 shadow-md shadow-black/30 shrink-0 animate-[spin_5s_linear_infinite]"
+                    />
+                  </div>
+                </div>
+              </div>
+            </ReelCard>
+          ))}
+        </div>
       </div>
     </MobileFrame>
   );
