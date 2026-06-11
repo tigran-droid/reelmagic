@@ -137,6 +137,8 @@ function Feed() {
   const [needsTapIndex, setNeedsTapIndex] = useState<number | null>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  // Cache of preloaded Audio objects keyed by URL so we never recreate them
+  const audioCacheRef = useRef<Map<string, HTMLAudioElement>>(new Map());
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pendingReelRef = useRef<Reel | null>(null);
@@ -182,8 +184,9 @@ function Feed() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("reels")
-        .select("*")
-        .order("created_at", { ascending: false });
+        .select("id,title,hashtags,song,image_url,image_urls,audio_url,audio_start_sec,audio_end_sec,prompt")
+        .order("created_at", { ascending: false })
+        .limit(30);
       if (error) throw error;
       return data.map<Reel>((r) => {
         const imgs =
@@ -224,6 +227,34 @@ function Feed() {
     scrollerRef.current?.scrollTo({ top: 0, behavior: "auto" });
   }, [tab]);
 
+  // Preload audio for current ±2 reels so next swipe plays instantly
+  useEffect(() => {
+    const cache = audioCacheRef.current;
+    const toPreload = reels
+      .slice(Math.max(0, activeIndex - 1), activeIndex + 3)
+      .map((r) => r.audio)
+      .filter((url): url is string => !!url);
+
+    for (const url of toPreload) {
+      if (!cache.has(url)) {
+        const el = new Audio(url);
+        el.preload = "auto";
+        el.load();
+        cache.set(url, el);
+      }
+    }
+
+    // Evict entries far from current index to avoid memory buildup
+    for (const [url, el] of cache.entries()) {
+      const reelIndex = reels.findIndex((r) => r.audio === url);
+      if (reelIndex !== -1 && Math.abs(reelIndex - activeIndex) > 4) {
+        el.pause();
+        el.src = "";
+        cache.delete(url);
+      }
+    }
+  }, [activeIndex, reels]);
+
   useEffect(() => {
     const audioUrl = activeAudioUrl;
 
@@ -233,21 +264,36 @@ function Feed() {
       return;
     }
 
+    // Stop whatever was playing
     const existing = audioRef.current;
     if (existing) {
       existing.pause();
-      existing.currentTime = 0;
+      existing.removeAttribute("data-playing");
     }
 
-    const player = new Audio(audioUrl);
+    // Reuse cached player — already loaded, no network round-trip
+    const cache = audioCacheRef.current;
+    const player = cache.get(audioUrl) ?? (() => {
+      const el = new Audio(audioUrl);
+      el.preload = "auto";
+      cache.set(audioUrl, el);
+      return el;
+    })();
+
     player.loop = false;
-    player.preload = "auto";
     audioRef.current = player;
 
     const startAt = activeAudioStart || 0;
-    const onLoaded = () => {
+
+    const seekAndPlay = () => {
       try { player.currentTime = startAt; } catch { /* noop */ }
+      player.play().then(() => {
+        setNeedsTapIndex((c) => (c === activeIndex ? null : c));
+      }).catch(() => {
+        setNeedsTapIndex(activeIndex);
+      });
     };
+
     const onTime = () => {
       const stopAt = activeAudioEnd ?? player.duration;
       if (stopAt && player.currentTime >= stopAt) {
@@ -255,23 +301,19 @@ function Feed() {
         player.play().catch(() => {});
       }
     };
-    player.addEventListener("loadedmetadata", onLoaded);
+
     player.addEventListener("timeupdate", onTime);
 
-    player.play().then(() => {
-      setNeedsTapIndex((current) => (current === activeIndex ? null : current));
-    }).catch(() => {
-      setNeedsTapIndex(activeIndex);
-    });
+    // If already loaded seek immediately, otherwise wait for metadata
+    if (player.readyState >= 1) {
+      seekAndPlay();
+    } else {
+      player.addEventListener("loadedmetadata", seekAndPlay, { once: true });
+    }
 
     return () => {
-      player.removeEventListener("loadedmetadata", onLoaded);
       player.removeEventListener("timeupdate", onTime);
       player.pause();
-      player.currentTime = 0;
-      if (audioRef.current === player) {
-        audioRef.current = null;
-      }
     };
   }, [activeAudioUrl, activeAudioStart, activeAudioEnd, activeIndex, reels.length]);
 
@@ -279,6 +321,11 @@ function Feed() {
     return () => {
       audioRef.current?.pause();
       audioRef.current = null;
+      for (const [, el] of audioCacheRef.current.entries()) {
+        el.pause();
+        el.src = "";
+      }
+      audioCacheRef.current.clear();
     };
   }, []);
 
