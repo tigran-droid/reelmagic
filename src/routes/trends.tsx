@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { MobileFrame } from "@/components/MobileFrame";
-import { MapPin, TrendingUp, Flame } from "lucide-react";
+import { MapPin, TrendingUp, Flame, Music2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import feed1 from "@/assets/feed-1.jpg";
@@ -36,13 +36,14 @@ const trendingTags = ["#aiart", "#glam", "#cinematic", "#anime", "#retro", "#por
 
 function Trends() {
   const navigate = useNavigate();
-  const { data } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ["trends-reels"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("reels")
-        .select("*")
-        .order("created_at", { ascending: false });
+        .select("id,title,song,hashtags,image_url,image_urls")
+        .order("created_at", { ascending: false })
+        .limit(24);
       if (error) throw error;
       return data.map<Tile>((r) => ({
         cover: (r.image_urls && r.image_urls[0]) || r.image_url,
@@ -51,10 +52,13 @@ function Trends() {
         hashtags: r.hashtags ?? [],
       }));
     },
-    staleTime: 0,
+    staleTime: 5 * 60_000,
+    gcTime: 15 * 60_000,
+    refetchOnWindowFocus: false,
   });
 
-  const tiles = [...(data ?? []), ...fallback];
+  // While loading show fallback immediately, then replace with real data
+  const tiles = isLoading ? fallback : [...(data ?? []), ...fallback];
 
   const col1 = tiles.filter((_, i) => i % 2 === 0);
   const col2 = tiles.filter((_, i) => i % 2 === 1);
@@ -175,7 +179,7 @@ function TrendCard({ tile, onClick }: { tile: Tile; onClick: () => void }) {
       </div>
       {tile.song && (
         <div className="flex items-center gap-1.5 mt-2 px-0.5">
-          <img src={tile.cover} alt="" className="size-5 rounded-full object-cover shrink-0" />
+          <Music2 className="size-3.5 text-muted-foreground shrink-0" />
           <div className="text-muted-foreground text-[11px] truncate">{tile.song}</div>
         </div>
       )}
