@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { MobileFrame } from "@/components/MobileFrame";
-import { Heart, MessageCircle, Send, Bookmark, Sparkles } from "lucide-react";
+import { Heart, MessageCircle, Send, Bookmark, Sparkles, ArrowLeft } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import feed1 from "@/assets/feed-1.jpg";
@@ -477,6 +477,13 @@ function Feed() {
 
       {/* ── Mobile feed layout ── */}
       <div className="md:hidden">
+        <button
+          onClick={() => navigate({ to: "/" })}
+          className="fixed top-12 left-4 z-50 size-9 rounded-full bg-black/50 backdrop-blur flex items-center justify-center text-white"
+          aria-label="Back"
+        >
+          <ArrowLeft className="size-5" />
+        </button>
         <div
           ref={scrollerRef}
           key={tab}
