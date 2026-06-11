@@ -7,6 +7,7 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
+import { InstallModal } from "@/components/InstallPrompt";
 
 import appCss from "../styles.css?url";
 
@@ -130,6 +131,7 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <Outlet />
+      <InstallModal />
     </QueryClientProvider>
   );
 }

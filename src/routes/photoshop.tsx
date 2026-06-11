@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { MobileFrame } from "@/components/MobileFrame";
+import { InstallCard } from "@/components/InstallPrompt";
 import { ChevronRight, Sparkles, SlidersHorizontal } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -126,6 +127,8 @@ function Photoshop() {
           </div>
         </section>
       )}
+
+      <InstallCard />
 
       <div className="space-y-7 pb-6">
         {sections.map((s) => (
