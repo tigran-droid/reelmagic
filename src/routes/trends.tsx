@@ -3,11 +3,6 @@ import { MobileFrame } from "@/components/MobileFrame";
 import { MapPin, TrendingUp, Flame, Music2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import feed1 from "@/assets/feed-1.jpg";
-import glam from "@/assets/reel-glam.jpg";
-import anime from "@/assets/reel-anime.jpg";
-import cinema from "@/assets/reel-cinema.jpg";
-import vhs from "@/assets/reel-vhs.jpg";
 
 export const Route = createFileRoute("/trends")({
   head: () => ({
@@ -21,22 +16,11 @@ export const Route = createFileRoute("/trends")({
 
 type Tile = { cover: string; title: string; song?: string; hashtags: string[] };
 
-const fallback: Tile[] = [
-  { cover: feed1, title: "Neon city nights", song: "Stardust", hashtags: ["neon", "city", "ai"] },
-  { cover: glam, title: "Glam hour", song: "Hot Pink", hashtags: ["glam", "beauty"] },
-  { cover: anime, title: "Shibuya 2am", song: "Tokyo Drift", hashtags: ["anime", "tokyo"] },
-  { cover: cinema, title: "Golden hour", song: "Sun Sets Twice", hashtags: ["cinema", "golden"] },
-  { cover: vhs, title: "VHS dreams", song: "Tape Rewind", hashtags: ["vhs", "retro"] },
-  { cover: glam, title: "Studio glow", song: "Aria", hashtags: ["studio", "portrait"] },
-  { cover: anime, title: "Midnight bloom", song: "Neon Haze", hashtags: ["bloom", "night"] },
-  { cover: cinema, title: "Mountain haze", song: "Echo Valley", hashtags: ["nature", "film"] },
-];
-
 const trendingTags = ["#aiart", "#glam", "#cinematic", "#anime", "#retro", "#portrait", "#neon", "#vhs"];
 
 function Trends() {
   const navigate = useNavigate();
-  const { data, isLoading } = useQuery({
+  const { data, isPending } = useQuery({
     queryKey: ["trends-reels"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -57,8 +41,9 @@ function Trends() {
     refetchOnWindowFocus: false,
   });
 
-  // While loading show fallback immediately, then replace with real data
-  const tiles = isLoading ? fallback : [...(data ?? []), ...fallback];
+  const tiles = data ?? [];
+
+  const skeletons = Array.from({ length: 8 });
 
   const col1 = tiles.filter((_, i) => i % 2 === 0);
   const col2 = tiles.filter((_, i) => i % 2 === 1);
@@ -119,36 +104,63 @@ function Trends() {
         <div className="flex items-center gap-2 mb-5">
           <TrendingUp className="size-4 text-brand" />
           <span className="text-sm font-bold text-foreground">Top reels in your region</span>
-          <span className="ml-auto text-xs text-muted-foreground">{tiles.length} reels</span>
+          {!isPending && <span className="ml-auto text-xs text-muted-foreground">{tiles.length} reels</span>}
         </div>
-        <div className="grid grid-cols-4 gap-4 items-start">
-          <div className="flex flex-col gap-4">
-            {dcol1.map((t, i) => <TrendCard key={`d1-${i}`} tile={t} onClick={open} />)}
+        {isPending ? (
+          <div className="grid grid-cols-4 gap-4 items-start">
+            {[0, 1, 2, 3].map((col) => (
+              <div key={col} className={`flex flex-col gap-4 ${col === 1 ? "mt-8" : col === 3 ? "mt-12" : ""}`}>
+                {skeletons.slice(0, 2).map((_, i) => <SkeletonCard key={i} />)}
+              </div>
+            ))}
           </div>
-          <div className="flex flex-col gap-4 mt-8">
-            {dcol2.map((t, i) => <TrendCard key={`d2-${i}`} tile={t} onClick={open} />)}
+        ) : (
+          <div className="grid grid-cols-4 gap-4 items-start">
+            <div className="flex flex-col gap-4">
+              {dcol1.map((t, i) => <TrendCard key={`d1-${i}`} tile={t} onClick={open} />)}
+            </div>
+            <div className="flex flex-col gap-4 mt-8">
+              {dcol2.map((t, i) => <TrendCard key={`d2-${i}`} tile={t} onClick={open} />)}
+            </div>
+            <div className="flex flex-col gap-4">
+              {dcol3.map((t, i) => <TrendCard key={`d3-${i}`} tile={t} onClick={open} />)}
+            </div>
+            <div className="flex flex-col gap-4 mt-12">
+              {dcol4.map((t, i) => <TrendCard key={`d4-${i}`} tile={t} onClick={open} />)}
+            </div>
           </div>
-          <div className="flex flex-col gap-4">
-            {dcol3.map((t, i) => <TrendCard key={`d3-${i}`} tile={t} onClick={open} />)}
-          </div>
-          <div className="flex flex-col gap-4 mt-12">
-            {dcol4.map((t, i) => <TrendCard key={`d4-${i}`} tile={t} onClick={open} />)}
-          </div>
-        </div>
+        )}
       </div>
 
       {/* ── Mobile masonry grid ── */}
       <div className="md:hidden px-3 pt-3 pb-6">
-        <div className="grid grid-cols-2 gap-3">
-          <div className="flex flex-col gap-4">
-            {col1.map((t, i) => <TrendCard key={`a-${i}`} tile={t} onClick={open} />)}
+        {isPending ? (
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-4">
+              {skeletons.slice(0, 4).map((_, i) => <SkeletonCard key={i} />)}
+            </div>
+            <div className="flex flex-col gap-4 pt-10">
+              {skeletons.slice(4).map((_, i) => <SkeletonCard key={i} />)}
+            </div>
           </div>
-          <div className="flex flex-col gap-4 pt-10">
-            {col2.map((t, i) => <TrendCard key={`b-${i}`} tile={t} onClick={open} />)}
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-4">
+              {col1.map((t, i) => <TrendCard key={`a-${i}`} tile={t} onClick={open} />)}
+            </div>
+            <div className="flex flex-col gap-4 pt-10">
+              {col2.map((t, i) => <TrendCard key={`b-${i}`} tile={t} onClick={open} />)}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </MobileFrame>
+  );
+}
+
+function SkeletonCard() {
+  return (
+    <div className="w-full rounded-xl bg-secondary aspect-[9/16] animate-pulse ring-1 ring-border" />
   );
 }
 
