@@ -525,7 +525,7 @@ function Feed() {
       {/* ── Mobile feed layout ── */}
       <div className="md:hidden">
         <button
-          onClick={() => navigate({ to: "/" })}
+          onClick={() => window.history.back()}
           className="fixed top-12 left-4 z-50 size-9 rounded-full bg-black/50 backdrop-blur flex items-center justify-center text-white"
           aria-label="Back"
         >

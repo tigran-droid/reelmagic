@@ -259,7 +259,7 @@ function PhotoshopFeed() {
     <MobileFrame immersive>
       <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={onPickUserPhotos} className="hidden" />
       <button
-        onClick={() => navigate({ to: "/photoshop" })}
+        onClick={() => window.history.back()}
         className="fixed top-4 left-4 z-50 size-9 rounded-full bg-black/50 backdrop-blur flex items-center justify-center text-white"
         aria-label="Back"
       >

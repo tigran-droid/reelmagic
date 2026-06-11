@@ -330,7 +330,7 @@ function VideoCreatePage() {
       <header className="flex items-center justify-between px-4 pt-3 pb-1">
         <button
           type="button"
-          onClick={() => navigate({ to: "/" })}
+          onClick={() => window.history.back()}
           className="size-9 -ml-2 grid place-items-center rounded-full text-foreground/80 active:bg-black/5"
           aria-label="Back"
         >
