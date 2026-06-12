@@ -1,15 +1,21 @@
 import { Link, useLocation } from "@tanstack/react-router";
-import { Video, ImagePlus, MapPin, Sparkles, Wand2 } from "lucide-react";
+import { Video, ImagePlus, MapPin, Sparkles, Wand2, LogIn, LogOut, User, CreditCard } from "lucide-react";
 import type { ReactNode } from "react";
+import { useState } from "react";
+import { useAuth } from "@/lib/auth-context";
+import { AuthModal } from "@/components/AuthModal";
 
 const tabs = [
   { to: "/", label: "Videos", icon: Video },
   { to: "/photoshop", label: "Photoshop", icon: ImagePlus },
   { to: "/trends", label: "Local", icon: MapPin },
+  { to: "/pricing", label: "Pricing", icon: CreditCard },
 ] as const;
 
 export function MobileFrame({ children, immersive = false }: { children: ReactNode; immersive?: boolean }) {
   const { pathname } = useLocation();
+  const { user, signOut } = useAuth();
+  const [showAuth, setShowAuth] = useState(false);
 
   return (
     <div className="min-h-dvh bg-background text-foreground md:flex">
@@ -48,8 +54,31 @@ export function MobileFrame({ children, immersive = false }: { children: ReactNo
           })}
         </nav>
 
-        {/* Create CTA — goes to the feed where the user picks a reel template to recreate */}
-        <div className="px-4 py-6">
+        {/* Auth + Create CTA */}
+        <div className="px-4 pb-6 space-y-3">
+          {user ? (
+            <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-secondary border border-border">
+              <div className="size-7 rounded-full bg-violet-600 flex items-center justify-center shrink-0">
+                <User className="size-3.5 text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-xs font-semibold truncate">{user.email}</div>
+                <div className="text-[10px] text-muted-foreground">Free plan</div>
+              </div>
+              <button onClick={signOut} className="text-muted-foreground hover:text-foreground">
+                <LogOut className="size-3.5" />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowAuth(true)}
+              className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl border border-border text-sm font-semibold text-foreground hover:bg-secondary transition-colors"
+            >
+              <LogIn className="size-4" />
+              Sign in
+            </button>
+          )}
+
           <Link
             to="/feed"
             className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-brand text-white text-sm font-bold shadow-lg shadow-brand/30 hover:bg-brand/90 transition-colors"
@@ -60,7 +89,7 @@ export function MobileFrame({ children, immersive = false }: { children: ReactNo
         </div>
       </aside>
 
-      {/* ── Content (rendered once, shared by both layouts) ── */}
+      {/* ── Content ── */}
       <div className="flex-1 flex flex-col relative max-w-[480px] mx-auto overflow-hidden md:max-w-none md:mx-0 md:overflow-visible">
         <main
           className={`flex-1 ${immersive ? "" : "pb-24 md:pb-0"} overflow-y-auto no-scrollbar md:min-h-screen`}
@@ -90,8 +119,21 @@ export function MobileFrame({ children, immersive = false }: { children: ReactNo
               </Link>
             );
           })}
+
+          {/* Auth button in mobile tab bar */}
+          {!user && (
+            <button
+              onClick={() => setShowAuth(true)}
+              className="flex flex-col items-center gap-1 w-16 text-muted-foreground"
+            >
+              <LogIn className="size-5" strokeWidth={2} />
+              <span className="text-[10px] font-medium uppercase tracking-tight">Sign in</span>
+            </button>
+          )}
         </nav>
       </div>
+
+      {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
     </div>
   );
 }

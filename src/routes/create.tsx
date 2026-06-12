@@ -13,6 +13,9 @@ import {
   MessageSquarePlus,
 } from "lucide-react";
 import { invokeEdgeFunction } from "@/lib/edge-functions";
+import { useAuth, hasReachedLimit, incrementUsage, FREE_GENERATION_LIMIT, getUsageCount } from "@/lib/auth-context";
+import { AuthModal } from "@/components/AuthModal";
+import { PaywallModal } from "@/components/PaywallModal";
 
 export const Route = createFileRoute("/create")({
   head: () => ({
@@ -129,14 +132,20 @@ function wait(ms: number) {
 
 function CreatePage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [reel, setReel] = useState<DraftReel | null>(null);
   const [userImages, setUserImages] = useState<string[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const [showAuth, setShowAuth] = useState(false);
+  const [showPaywall, setShowPaywall] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const moreInputRef = useRef<HTMLInputElement>(null);
   const didAutoRun = useRef(false);
+
+  const usageCount = user ? getUsageCount(user.id) : 0;
+  const remainingFree = Math.max(0, FREE_GENERATION_LIMIT - usageCount);
 
   // Hydrate from sessionStorage
   useEffect(() => {
@@ -171,6 +180,19 @@ function CreatePage() {
     promptText?: string,
   ) => {
     if (!reel || !templateUrl || imgs.length === 0) return;
+
+    // Auth gate — must be signed in
+    if (!user) {
+      setShowAuth(true);
+      return;
+    }
+
+    // Usage gate — free tier limit
+    if (hasReachedLimit(user.id)) {
+      setShowPaywall(true);
+      return;
+    }
+
     setBusy(true);
     const statusId = uid();
     const trimmedPrompt = promptText?.trim();
@@ -259,6 +281,8 @@ function CreatePage() {
             imageDataUrl,
           }),
       );
+      // Count the successful generation
+      if (user) incrementUsage(user.id);
     } catch (e) {
       const text = e instanceof Error ? e.message : "Failed";
       setMessages((m) =>
@@ -346,6 +370,14 @@ function CreatePage() {
 
   return (
     <div className="relative h-dvh flex flex-col bg-[oklch(0.97_0.01_240)] text-foreground">
+      {showAuth && <AuthModal onClose={() => setShowAuth(false)} defaultMode="signup" />}
+      {showPaywall && (
+        <PaywallModal
+          onClose={() => setShowPaywall(false)}
+          onSignIn={() => { setShowPaywall(false); setShowAuth(true); }}
+        />
+      )}
+
       {/* Header */}
       <header className="flex items-center justify-between px-4 pt-3 pb-1">
         <button
@@ -375,9 +407,44 @@ function CreatePage() {
         </div>
       </header>
 
-      <p className="text-center text-[13px] text-muted-foreground pb-3">
+      <p className="text-center text-[13px] text-muted-foreground pb-1">
         Responses are AI-generated. Please double-check.
       </p>
+
+      {/* Usage / auth indicator */}
+      {!user ? (
+        <div className="mx-4 mb-3 flex items-center justify-between bg-violet-50 border border-violet-200 rounded-xl px-4 py-2.5">
+          <div className="text-xs text-violet-700 font-semibold">Sign in to start generating</div>
+          <button
+            onClick={() => setShowAuth(true)}
+            className="text-xs font-bold text-violet-600 bg-violet-100 hover:bg-violet-200 px-3 py-1.5 rounded-lg transition-colors"
+          >
+            Sign in
+          </button>
+        </div>
+      ) : remainingFree > 0 ? (
+        <div className="mx-4 mb-3 flex items-center gap-2 bg-violet-50 border border-violet-100 rounded-xl px-4 py-2">
+          <Sparkles className="size-3.5 text-violet-500 shrink-0" />
+          <span className="text-xs text-violet-700 font-medium">
+            <span className="font-extrabold">{remainingFree}</span> free generation{remainingFree !== 1 ? "s" : ""} left
+          </span>
+          <div className="ml-auto flex gap-1">
+            {Array.from({ length: FREE_GENERATION_LIMIT }).map((_, i) => (
+              <div key={i} className={`size-2 rounded-full ${i < usageCount ? "bg-violet-300" : "bg-violet-600"}`} />
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="mx-4 mb-3 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5">
+          <div className="text-xs text-amber-700 font-semibold">Free limit reached — upgrade to continue</div>
+          <button
+            onClick={() => setShowPaywall(true)}
+            className="text-xs font-bold text-white bg-amber-500 hover:bg-amber-400 px-3 py-1.5 rounded-lg transition-colors"
+          >
+            Upgrade
+          </button>
+        </div>
+      )}
 
       {/* Chat scroller */}
       <div

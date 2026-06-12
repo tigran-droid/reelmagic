@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as VideoCreateRouteImport } from './routes/video-create'
 import { Route as TrendsRouteImport } from './routes/trends'
 import { Route as ToolsRouteImport } from './routes/tools'
+import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as PhotoshopRouteImport } from './routes/photoshop'
 import { Route as FeedRouteImport } from './routes/feed'
 import { Route as CreateRouteImport } from './routes/create'
@@ -32,6 +33,11 @@ const TrendsRoute = TrendsRouteImport.update({
 const ToolsRoute = ToolsRouteImport.update({
   id: '/tools',
   path: '/tools',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PricingRoute = PricingRouteImport.update({
+  id: '/pricing',
+  path: '/pricing',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PhotoshopRoute = PhotoshopRouteImport.update({
@@ -71,6 +77,7 @@ export interface FileRoutesByFullPath {
   '/create': typeof CreateRoute
   '/feed': typeof FeedRoute
   '/photoshop': typeof PhotoshopRoute
+  '/pricing': typeof PricingRoute
   '/tools': typeof ToolsRoute
   '/trends': typeof TrendsRoute
   '/video-create': typeof VideoCreateRoute
@@ -82,6 +89,7 @@ export interface FileRoutesByTo {
   '/create': typeof CreateRoute
   '/feed': typeof FeedRoute
   '/photoshop': typeof PhotoshopRoute
+  '/pricing': typeof PricingRoute
   '/tools': typeof ToolsRoute
   '/trends': typeof TrendsRoute
   '/video-create': typeof VideoCreateRoute
@@ -94,6 +102,7 @@ export interface FileRoutesById {
   '/create': typeof CreateRoute
   '/feed': typeof FeedRoute
   '/photoshop': typeof PhotoshopRoute
+  '/pricing': typeof PricingRoute
   '/tools': typeof ToolsRoute
   '/trends': typeof TrendsRoute
   '/video-create': typeof VideoCreateRoute
@@ -107,6 +116,7 @@ export interface FileRouteTypes {
     | '/create'
     | '/feed'
     | '/photoshop'
+    | '/pricing'
     | '/tools'
     | '/trends'
     | '/video-create'
@@ -118,6 +128,7 @@ export interface FileRouteTypes {
     | '/create'
     | '/feed'
     | '/photoshop'
+    | '/pricing'
     | '/tools'
     | '/trends'
     | '/video-create'
@@ -129,6 +140,7 @@ export interface FileRouteTypes {
     | '/create'
     | '/feed'
     | '/photoshop'
+    | '/pricing'
     | '/tools'
     | '/trends'
     | '/video-create'
@@ -141,6 +153,7 @@ export interface RootRouteChildren {
   CreateRoute: typeof CreateRoute
   FeedRoute: typeof FeedRoute
   PhotoshopRoute: typeof PhotoshopRoute
+  PricingRoute: typeof PricingRoute
   ToolsRoute: typeof ToolsRoute
   TrendsRoute: typeof TrendsRoute
   VideoCreateRoute: typeof VideoCreateRoute
@@ -168,6 +181,13 @@ declare module '@tanstack/react-router' {
       path: '/tools'
       fullPath: '/tools'
       preLoaderRoute: typeof ToolsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pricing': {
+      id: '/pricing'
+      path: '/pricing'
+      fullPath: '/pricing'
+      preLoaderRoute: typeof PricingRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/photoshop': {
@@ -221,6 +241,7 @@ const rootRouteChildren: RootRouteChildren = {
   CreateRoute: CreateRoute,
   FeedRoute: FeedRoute,
   PhotoshopRoute: PhotoshopRoute,
+  PricingRoute: PricingRoute,
   ToolsRoute: ToolsRoute,
   TrendsRoute: TrendsRoute,
   VideoCreateRoute: VideoCreateRoute,
