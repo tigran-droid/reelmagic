@@ -74,9 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function signInWithGoogle() {
-    const redirectTo = typeof window !== "undefined"
-      ? `${window.location.origin}/`
-      : undefined;
+    const redirectTo = "https://reelmagic.tigran-1ab.workers.dev/";
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: { redirectTo, queryParams: { access_type: "offline", prompt: "select_account" } },
