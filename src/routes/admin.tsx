@@ -1,9 +1,10 @@
 import { useState, useRef } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
-import { Upload, Image as ImageIcon, Music, Loader2, Trash2, Pencil, X, Check, Plus, ArrowUp, ArrowDown, Video as VideoIcon, FileText } from "lucide-react";
+import { Upload, Image as ImageIcon, Music, Loader2, Trash2, Pencil, X, Check, Plus, ArrowUp, ArrowDown, Video as VideoIcon, FileText, Search, Coins } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AudioTrimmer } from "@/components/AudioTrimmer";
+import { useAuth } from "@/lib/auth-context";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({
@@ -16,7 +17,8 @@ export const Route = createFileRoute("/admin")({
 });
 
 function Admin() {
-  const [tab, setTab] = useState<"reels" | "photoshop" | "videos">("reels");
+  const { isAdmin } = useAuth();
+  const [tab, setTab] = useState<"reels" | "photoshop" | "videos" | "users">("reels");
   return (
     <div className="min-h-dvh bg-background text-foreground">
       <div className="max-w-5xl mx-auto px-4 md:px-8 py-6 md:py-10">
@@ -29,7 +31,7 @@ function Admin() {
         </div>
 
         <div className="inline-flex p-1 rounded-xl bg-card border border-border mb-6">
-          {(["reels", "photoshop", "videos"] as const).map((t) => (
+          {(["reels", "photoshop", "videos", "users"] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -45,7 +47,158 @@ function Admin() {
         {tab === "reels" && <ReelsAdmin />}
         {tab === "photoshop" && <PhotoshopAdmin />}
         {tab === "videos" && <VideosAdmin />}
+        {tab === "users" && <UsersAdmin isAdmin={isAdmin} />}
       </div>
+    </div>
+  );
+}
+
+/* =========================================================================
+   USERS ADMIN — list users, search, grant credits
+   ========================================================================= */
+
+type ProfileRow = {
+  id: string;
+  email: string | null;
+  credits: number;
+  is_admin: boolean;
+  created_at: string;
+};
+
+function UsersAdmin({ isAdmin }: { isAdmin: boolean }) {
+  const qc = useQueryClient();
+  const [search, setSearch] = useState("");
+
+  const usersQ = useQuery({
+    queryKey: ["admin-users"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, email, credits, is_admin, created_at")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data as ProfileRow[];
+    },
+    enabled: isAdmin,
+  });
+
+  if (!isAdmin) {
+    return (
+      <div className="bg-card border border-border rounded-2xl p-8 text-center">
+        <p className="text-sm text-muted-foreground">
+          You need to be signed in as an admin to manage users.
+        </p>
+      </div>
+    );
+  }
+
+  const users = usersQ.data ?? [];
+  const filtered = search.trim()
+    ? users.filter((u) => (u.email ?? "").toLowerCase().includes(search.trim().toLowerCase()))
+    : users;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <p className="text-sm text-muted-foreground">
+          <span className="font-bold text-foreground">{users.length}</span> total account{users.length !== 1 ? "s" : ""}
+        </p>
+      </div>
+
+      {/* Search */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search by email…"
+          className="w-full bg-background border border-border rounded-xl pl-10 pr-4 py-2.5 text-sm"
+        />
+      </div>
+
+      {usersQ.isPending && (
+        <div className="flex justify-center py-8">
+          <Loader2 className="size-5 animate-spin text-muted-foreground" />
+        </div>
+      )}
+      {usersQ.error && (
+        <p className="text-sm text-destructive">
+          Could not load users. Make sure you ran SETUP_CREDITS.sql in Supabase.
+        </p>
+      )}
+
+      <div className="space-y-2">
+        {filtered.map((u) => (
+          <UserRow key={u.id} user={u} onGranted={() => qc.invalidateQueries({ queryKey: ["admin-users"] })} />
+        ))}
+        {usersQ.data && filtered.length === 0 && (
+          <p className="text-sm text-muted-foreground py-4">No users match “{search}”.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function UserRow({ user, onGranted }: { user: ProfileRow; onGranted: () => void }) {
+  const [amount, setAmount] = useState("100");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  const grant = async () => {
+    const n = parseInt(amount, 10);
+    if (!user.email || !Number.isFinite(n) || n === 0) return;
+    setBusy(true);
+    setMsg(null);
+    const { data, error } = await supabase.rpc("admin_add_credits", {
+      p_email: user.email,
+      p_amount: n,
+    });
+    setBusy(false);
+    if (error) { setMsg(error.message); return; }
+    setMsg(`✓ New balance: ${data}`);
+    onGranted();
+  };
+
+  return (
+    <div className="bg-card border border-border rounded-xl p-3">
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-semibold truncate">{user.email ?? "(no email)"}</p>
+            {user.is_admin && (
+              <span className="text-[9px] font-extrabold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-brand/20 text-brand">
+                Admin
+              </span>
+            )}
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            Joined {new Date(user.created_at).toLocaleDateString()}
+          </p>
+        </div>
+
+        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-background border border-border">
+          <Coins className="size-3.5 text-amber-500" />
+          <span className="text-sm font-bold tabular-nums">{user.credits}</span>
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          <input
+            value={amount}
+            onChange={(e) => setAmount(e.target.value.replace(/[^0-9-]/g, ""))}
+            className="w-16 bg-background border border-border rounded-lg px-2 py-1.5 text-sm text-center"
+            inputMode="numeric"
+          />
+          <button
+            onClick={grant}
+            disabled={busy}
+            className="inline-flex items-center gap-1 bg-brand text-white text-xs font-semibold rounded-lg px-3 py-1.5 disabled:opacity-60"
+          >
+            {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Plus className="size-3.5" />}
+            Add
+          </button>
+        </div>
+      </div>
+      {msg && <p className="text-[11px] text-muted-foreground mt-2">{msg}</p>}
     </div>
   );
 }

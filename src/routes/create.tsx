@@ -13,7 +13,7 @@ import {
   MessageSquarePlus,
 } from "lucide-react";
 import { invokeEdgeFunction } from "@/lib/edge-functions";
-import { useAuth, hasReachedLimit, incrementUsage, FREE_GENERATION_LIMIT, getUsageCount } from "@/lib/auth-context";
+import { useAuth, PHOTO_COST } from "@/lib/auth-context";
 import { AuthModal } from "@/components/AuthModal";
 import { PaywallModal } from "@/components/PaywallModal";
 
@@ -132,7 +132,7 @@ function wait(ms: number) {
 
 function CreatePage() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, credits, deductCredits } = useAuth();
   const [reel, setReel] = useState<DraftReel | null>(null);
   const [userImages, setUserImages] = useState<string[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -144,8 +144,7 @@ function CreatePage() {
   const moreInputRef = useRef<HTMLInputElement>(null);
   const didAutoRun = useRef(false);
 
-  const usageCount = user ? getUsageCount(user.id) : 0;
-  const remainingFree = Math.max(0, FREE_GENERATION_LIMIT - usageCount);
+  const canAfford = credits >= PHOTO_COST;
 
   // Hydrate from sessionStorage
   useEffect(() => {
@@ -187,8 +186,8 @@ function CreatePage() {
       return;
     }
 
-    // Usage gate — free tier limit
-    if (hasReachedLimit(user.id)) {
+    // Credit gate — need enough credits for a photo
+    if (credits < PHOTO_COST) {
       setShowPaywall(true);
       return;
     }
@@ -281,8 +280,8 @@ function CreatePage() {
             imageDataUrl,
           }),
       );
-      // Count the successful generation
-      if (user) incrementUsage(user.id);
+      // Charge credits for the successful generation
+      void deductCredits(PHOTO_COST);
     } catch (e) {
       const text = e instanceof Error ? e.message : "Failed";
       setMessages((m) =>
@@ -422,21 +421,21 @@ function CreatePage() {
             Sign in
           </button>
         </div>
-      ) : remainingFree > 0 ? (
+      ) : canAfford ? (
         <div className="mx-4 mb-3 flex items-center gap-2 bg-violet-50 border border-violet-100 rounded-xl px-4 py-2">
           <Sparkles className="size-3.5 text-violet-500 shrink-0" />
           <span className="text-xs text-violet-700 font-medium">
-            <span className="font-extrabold">{remainingFree}</span> free generation{remainingFree !== 1 ? "s" : ""} left
+            <span className="font-extrabold">{credits}</span> credit{credits !== 1 ? "s" : ""} left
           </span>
-          <div className="ml-auto flex gap-1">
-            {Array.from({ length: FREE_GENERATION_LIMIT }).map((_, i) => (
-              <div key={i} className={`size-2 rounded-full ${i < usageCount ? "bg-violet-300" : "bg-violet-600"}`} />
-            ))}
-          </div>
+          <span className="ml-auto text-[11px] text-violet-500 font-semibold">
+            {PHOTO_COST} credits / photo
+          </span>
         </div>
       ) : (
         <div className="mx-4 mb-3 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5">
-          <div className="text-xs text-amber-700 font-semibold">Free limit reached — upgrade to continue</div>
+          <div className="text-xs text-amber-700 font-semibold">
+            Not enough credits ({credits} left) — upgrade to continue
+          </div>
           <button
             onClick={() => setShowPaywall(true)}
             className="text-xs font-bold text-white bg-amber-500 hover:bg-amber-400 px-3 py-1.5 rounded-lg transition-colors"

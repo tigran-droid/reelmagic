@@ -1,9 +1,9 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { MobileFrame } from "@/components/MobileFrame";
-import { Check, Sparkles, Zap, Crown, ArrowLeft } from "lucide-react";
+import { Check, Sparkles, Zap, Crown, ArrowLeft, Coins } from "lucide-react";
 import { useState } from "react";
 import { AuthModal } from "@/components/AuthModal";
-import { useAuth } from "@/lib/auth-context";
+import { useAuth, PHOTO_COST, VIDEO_COST } from "@/lib/auth-context";
 
 export const Route = createFileRoute("/pricing")({
   head: () => ({
@@ -15,65 +15,72 @@ export const Route = createFileRoute("/pricing")({
   component: Pricing,
 });
 
-const plans = [
+const packs = [
   {
     id: "free",
-    name: "Free",
+    name: "Free starter",
     price: "$0",
-    period: "",
+    credits: 10,
     icon: <Sparkles className="size-5 text-white/60" />,
-    color: "bg-white/10",
-    features: ["3 AI generations", "Standard queue", "Watermarked exports"],
+    color: "bg-white/5",
+    border: "border-border",
+    features: [
+      `10 free credits on sign up`,
+      `1 photo = ${PHOTO_COST} credits`,
+      `1 video = ${VIDEO_COST} credits`,
+      "No credit card needed",
+    ],
     cta: "Current plan",
     disabled: true,
   },
   {
-    id: "pro",
-    name: "Pro",
-    price: "Coming soon",
-    period: "",
+    id: "starter",
+    name: "Starter Pack",
+    price: "$10",
+    credits: 300,
     icon: <Zap className="size-5 text-violet-300" />,
-    color: "bg-gradient-to-br from-violet-600/30 to-purple-700/30",
+    color: "bg-gradient-to-br from-violet-600/20 to-purple-700/20",
     border: "border-violet-500/40",
     badge: "Most popular",
     features: [
-      "Unlimited generations",
+      "300 credits",
+      `≈ ${Math.floor(300 / PHOTO_COST)} photos or ${Math.floor(300 / VIDEO_COST)} videos`,
+      "Credits never expire",
       "Priority processing",
-      "HD exports (no watermark)",
-      "All styles & filters",
     ],
-    cta: "Notify me",
+    cta: "Buy for $10",
     highlight: true,
   },
   {
-    id: "studio",
-    name: "Studio",
-    price: "Coming soon",
-    period: "",
+    id: "pro",
+    name: "Pro Pack",
+    price: "$20",
+    credits: 1000,
     icon: <Crown className="size-5 text-amber-400" />,
-    color: "bg-gradient-to-br from-amber-500/20 to-orange-600/20",
+    color: "bg-gradient-to-br from-amber-500/15 to-orange-600/15",
     border: "border-amber-500/30",
+    badge: "Best value",
     features: [
-      "Everything in Pro",
-      "API access",
-      "Team seats (up to 5)",
-      "Analytics dashboard",
-      "Priority support",
+      "1,000 credits",
+      `≈ ${Math.floor(1000 / PHOTO_COST)} photos or ${Math.floor(1000 / VIDEO_COST)} videos`,
+      "Credits never expire",
+      "Priority processing",
+      "50% cheaper per credit",
     ],
-    cta: "Notify me",
+    cta: "Buy for $20",
   },
 ];
 
 function Pricing() {
-  const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, credits } = useAuth();
   const [showAuth, setShowAuth] = useState(false);
   const [notified, setNotified] = useState<string[]>([]);
 
-  function handleCta(planId: string) {
-    if (planId === "free") return;
+  function handleCta(packId: string) {
+    if (packId === "free") return;
     if (!user) { setShowAuth(true); return; }
-    setNotified((p) => [...p, planId]);
+    // Payment not yet integrated — collect interest for now
+    setNotified((p) => [...p, packId]);
   }
 
   return (
@@ -88,42 +95,81 @@ function Pricing() {
       </button>
 
       <div className="px-5 pt-16 pb-10 max-w-lg mx-auto">
+        {/* Header */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-violet-500/15 border border-violet-500/20 text-violet-400 text-xs font-bold mb-4">
-            <Sparkles className="size-3" /> Pricing
+            <Coins className="size-3" /> Credits
           </div>
-          <h1 className="text-3xl font-extrabold tracking-tight">Simple pricing</h1>
+          <h1 className="text-3xl font-extrabold tracking-tight">Buy credits</h1>
           <p className="text-muted-foreground text-sm mt-2">
-            Start free. Upgrade when you're ready.
+            Pay once, use anytime. Credits never expire.
           </p>
         </div>
 
+        {/* Current balance pill — only when signed in */}
+        {user && (
+          <div className="flex items-center justify-center gap-2 mb-6 px-4 py-2.5 rounded-2xl bg-violet-500/10 border border-violet-500/20">
+            <Coins className="size-4 text-violet-400" />
+            <span className="text-sm font-bold text-violet-300">
+              {credits} credit{credits !== 1 ? "s" : ""} remaining
+            </span>
+          </div>
+        )}
+
+        {/* How credits work */}
+        <div className="mb-6 rounded-2xl border border-border bg-card p-4 space-y-2">
+          <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3">How it works</p>
+          <div className="flex items-center gap-3">
+            <div className="size-8 rounded-lg bg-violet-500/15 flex items-center justify-center shrink-0">
+              <Sparkles className="size-4 text-violet-400" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold">Photo generation = {PHOTO_COST} credits</p>
+              <p className="text-xs text-muted-foreground">AI face swap / style recreation</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="size-8 rounded-lg bg-amber-500/15 flex items-center justify-center shrink-0">
+              <Zap className="size-4 text-amber-400" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold">Video generation = {VIDEO_COST} credits</p>
+              <p className="text-xs text-muted-foreground">Full AI video from your photo</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Packs */}
         <div className="space-y-4">
-          {plans.map((plan) => (
+          {packs.map((pack) => (
             <div
-              key={plan.id}
-              className={`relative rounded-2xl border p-5 ${plan.color} ${plan.border ?? "border-border"}`}
+              key={pack.id}
+              className={`relative rounded-2xl border p-5 ${pack.color} ${pack.border}`}
             >
-              {plan.badge && (
-                <div className="absolute -top-2.5 left-5 px-3 py-0.5 rounded-full bg-violet-600 text-white text-[10px] font-extrabold uppercase tracking-wider">
-                  {plan.badge}
+              {pack.badge && (
+                <div className={`absolute -top-2.5 left-5 px-3 py-0.5 rounded-full text-white text-[10px] font-extrabold uppercase tracking-wider ${pack.id === "pro" ? "bg-amber-500" : "bg-violet-600"}`}>
+                  {pack.badge}
                 </div>
               )}
 
-              <div className="flex items-start justify-between mb-4">
+              <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
                   <div className="size-10 rounded-xl bg-white/10 flex items-center justify-center">
-                    {plan.icon}
+                    {pack.icon}
                   </div>
                   <div>
-                    <div className="font-extrabold text-foreground">{plan.name}</div>
-                    <div className="text-xs text-muted-foreground">{plan.price}{plan.period}</div>
+                    <div className="font-extrabold text-foreground">{pack.name}</div>
+                    <div className="text-xs text-muted-foreground">{pack.price}</div>
                   </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-2xl font-extrabold tabular-nums">{pack.credits.toLocaleString()}</div>
+                  <div className="text-[10px] text-muted-foreground uppercase tracking-wide">credits</div>
                 </div>
               </div>
 
               <ul className="space-y-2 mb-5">
-                {plan.features.map((f) => (
+                {pack.features.map((f) => (
                   <li key={f} className="flex items-center gap-2 text-sm text-foreground/80">
                     <Check className="size-3.5 text-green-400 shrink-0" />
                     {f}
@@ -132,22 +178,24 @@ function Pricing() {
               </ul>
 
               <button
-                onClick={() => handleCta(plan.id)}
-                disabled={plan.disabled || notified.includes(plan.id)}
+                onClick={() => handleCta(pack.id)}
+                disabled={pack.disabled || notified.includes(pack.id)}
                 className={`w-full py-3 rounded-xl text-sm font-bold transition-all ${
-                  plan.highlight
+                  pack.highlight
                     ? "bg-violet-600 text-white hover:bg-violet-500 shadow-lg shadow-violet-500/20"
-                    : "bg-secondary border border-border text-foreground hover:bg-secondary/80"
+                    : pack.id === "pro"
+                    ? "bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:opacity-90 shadow-lg shadow-amber-500/20"
+                    : "bg-secondary border border-border text-foreground"
                 } disabled:opacity-50 disabled:cursor-default`}
               >
-                {notified.includes(plan.id) ? "✓ We'll notify you!" : plan.cta}
+                {notified.includes(pack.id) ? "✓ We'll notify you when live!" : pack.cta}
               </button>
             </div>
           ))}
         </div>
 
         <p className="text-center text-xs text-muted-foreground mt-6">
-          Paid plans launching soon. Get notified when they go live.
+          Payment integration coming soon. Click a pack to be notified when it launches.
         </p>
       </div>
 

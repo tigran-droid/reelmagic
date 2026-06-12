@@ -14,6 +14,9 @@ import {
   Video as VideoIcon,
 } from "lucide-react";
 import { invokeEdgeFunction } from "@/lib/edge-functions";
+import { useAuth, VIDEO_COST } from "@/lib/auth-context";
+import { AuthModal } from "@/components/AuthModal";
+import { PaywallModal } from "@/components/PaywallModal";
 
 export const Route = createFileRoute("/video-create")({
   head: () => ({
@@ -107,13 +110,18 @@ async function optimizeImageForUpload(file: File): Promise<string> {
 
 function VideoCreatePage() {
   const navigate = useNavigate();
+  const { user, credits, deductCredits } = useAuth();
   const [item, setItem] = useState<VideoItem | null>(null);
   const [userImages, setUserImages] = useState<string[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [busy, setBusy] = useState(false);
+  const [showAuth, setShowAuth] = useState(false);
+  const [showPaywall, setShowPaywall] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const pickerRef = useRef<HTMLInputElement>(null);
   const didStart = useRef(false);
+
+  const canAfford = credits >= VIDEO_COST;
 
   // Hydrate from sessionStorage
   useEffect(() => {
@@ -273,6 +281,8 @@ function VideoCreatePage() {
           .filter((x) => x.id !== statusId)
           .concat({ id: uid(), role: "assistant", kind: "video", videoUrl: videoUrl! }),
       );
+      // Charge credits only after a successful video.
+      void deductCredits(VIDEO_COST);
     } catch (e) {
       const text = e instanceof Error ? e.message : "Failed";
       const friendlyText = /timed out/i.test(text)
@@ -293,6 +303,11 @@ function VideoCreatePage() {
     e.target.value = "";
     if (files.length === 0) return;
     if (busy || didStart.current) return; // guard against double-pick
+
+    // Auth gate — must be signed in
+    if (!user) { setShowAuth(true); return; }
+    // Credit gate — videos are expensive
+    if (credits < VIDEO_COST) { setShowPaywall(true); return; }
     const urls = await Promise.all(files.map(optimizeImageForUpload));
     setUserImages(urls);
     sessionStorage.setItem(USER_IMAGES_KEY, JSON.stringify(urls));
@@ -326,6 +341,14 @@ function VideoCreatePage() {
 
   return (
     <div className="relative h-dvh flex flex-col bg-[oklch(0.97_0.01_240)] text-foreground">
+      {showAuth && <AuthModal onClose={() => setShowAuth(false)} defaultMode="signup" />}
+      {showPaywall && (
+        <PaywallModal
+          onClose={() => setShowPaywall(false)}
+          onSignIn={() => { setShowPaywall(false); setShowAuth(true); }}
+        />
+      )}
+
       {/* Header */}
       <header className="flex items-center justify-between px-4 pt-3 pb-1">
         <button
@@ -347,9 +370,44 @@ function VideoCreatePage() {
         </div>
       </header>
 
-      <p className="text-center text-[13px] text-muted-foreground pb-3">
+      <p className="text-center text-[13px] text-muted-foreground pb-1">
         AI-generated video. Please double-check.
       </p>
+
+      {/* Credit / auth indicator */}
+      {!user ? (
+        <div className="mx-4 mb-3 flex items-center justify-between bg-violet-50 border border-violet-200 rounded-xl px-4 py-2.5">
+          <div className="text-xs text-violet-700 font-semibold">Sign in to create videos</div>
+          <button
+            onClick={() => setShowAuth(true)}
+            className="text-xs font-bold text-violet-600 bg-violet-100 hover:bg-violet-200 px-3 py-1.5 rounded-lg transition-colors"
+          >
+            Sign in
+          </button>
+        </div>
+      ) : canAfford ? (
+        <div className="mx-4 mb-3 flex items-center gap-2 bg-violet-50 border border-violet-100 rounded-xl px-4 py-2">
+          <Sparkles className="size-3.5 text-violet-500 shrink-0" />
+          <span className="text-xs text-violet-700 font-medium">
+            <span className="font-extrabold">{credits}</span> credit{credits !== 1 ? "s" : ""} left
+          </span>
+          <span className="ml-auto text-[11px] text-violet-500 font-semibold">
+            {VIDEO_COST} credits / video
+          </span>
+        </div>
+      ) : (
+        <div className="mx-4 mb-3 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5">
+          <div className="text-xs text-amber-700 font-semibold">
+            Need {VIDEO_COST} credits ({credits} left) — upgrade to continue
+          </div>
+          <button
+            onClick={() => setShowPaywall(true)}
+            className="text-xs font-bold text-white bg-amber-500 hover:bg-amber-400 px-3 py-1.5 rounded-lg transition-colors"
+          >
+            Upgrade
+          </button>
+        </div>
+      )}
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 pb-4 space-y-3">
         {messages.map((m) => (

@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { X, Mail, Lock, Sparkles, Eye, EyeOff, Loader2 } from "lucide-react";
-import { useAuth } from "@/lib/auth-context";
+import { X, Mail, Lock, Sparkles, Eye, EyeOff, Loader2, Coins } from "lucide-react";
+import { useAuth, PHOTO_COST, VIDEO_COST, FREE_CREDITS } from "@/lib/auth-context";
 
 type Mode = "login" | "signup";
 
@@ -85,11 +85,26 @@ export function AuthModal({ onClose, defaultMode = "signup" }: { onClose: () => 
             <h2 className="text-center text-xl font-extrabold text-white mb-1">
               {mode === "signup" ? "Create your account" : "Welcome back"}
             </h2>
-            <p className="text-center text-xs text-white/45 mb-6">
+            <p className="text-center text-xs text-white/45 mb-4">
               {mode === "signup"
-                ? "Get 3 free AI generations — no credit card needed"
+                ? "No credit card needed"
                 : "Sign in to continue creating"}
             </p>
+
+            {/* Free credits welcome — signup only */}
+            {mode === "signup" && (
+              <div className="flex items-start gap-3 bg-amber-500/10 border border-amber-500/25 rounded-2xl px-4 py-3 mb-5">
+                <Coins className="size-4 text-amber-400 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-xs font-bold text-amber-300">
+                    {FREE_CREDITS} free credits on sign up
+                  </p>
+                  <p className="text-[11px] text-white/50 mt-0.5 leading-relaxed">
+                    1 photo = {PHOTO_COST} credits &nbsp;·&nbsp; 1 video = {VIDEO_COST} credits
+                  </p>
+                </div>
+              </div>
+            )}
 
             {/* Google button */}
             <button

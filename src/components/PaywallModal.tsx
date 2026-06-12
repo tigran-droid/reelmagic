@@ -26,25 +26,26 @@ export function PaywallModal({ onClose, onSignIn }: { onClose: () => void; onSig
         </div>
 
         <h2 className="text-center text-xl font-extrabold text-white mb-2">
-          Free limit reached
+          Out of credits
         </h2>
         <p className="text-center text-sm text-white/50 mb-6 leading-relaxed">
-          You've used all 3 free generations.<br />
-          Upgrade to keep creating unlimited AI reels.
+          You've used all your free credits.<br />
+          Upgrade to keep creating AI reels & videos.
         </p>
 
-        {/* Plans preview */}
+        {/* Credit packs preview */}
         <div className="space-y-2 mb-6">
           <PlanRow
             icon={<Zap className="size-4 text-violet-400" />}
-            name="Pro"
-            desc="Unlimited generations · Priority queue"
-            badge="Most popular"
+            name="Starter Pack"
+            desc="300 credits — ~100 photos or 15 videos"
+            badge="$10"
           />
           <PlanRow
             icon={<Crown className="size-4 text-amber-400" />}
-            name="Studio"
-            desc="Everything in Pro · API access · Team seats"
+            name="Pro Pack"
+            desc="1,000 credits — ~333 photos or 50 videos"
+            badge="$20"
           />
         </div>
 
