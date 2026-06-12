@@ -69,24 +69,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    let initialised = false;
-
-    supabase.auth.getSession().then(({ data }) => {
-      const u = data.session?.user ?? null;
-      setUser(u);
-      void loadProfile(u);
-      setLoading(false);
-      initialised = true;
-    });
-
+    // In Supabase v2 the canonical startup pattern is onAuthStateChange.
+    // It fires INITIAL_SESSION first with whatever is in storage (could be a
+    // valid session, an expired-but-refreshable session, or null).
+    // We rely on this instead of a separate getSession() call so the two don't
+    // race and produce a flash of signed-out state.
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      // Ignore SIGNED_OUT fired before getSession() finishes — it's a Supabase
-      // initialisation artefact and would incorrectly clear a stored session.
-      if (!initialised && event === "SIGNED_OUT") return;
       const u = session?.user ?? null;
       setUser(u);
-      void loadProfile(u);
-      if (!initialised) { setLoading(false); initialised = true; }
+      if (u) {
+        void loadProfile(u);
+      } else {
+        setCredits(0);
+        setIsAdmin(false);
+      }
+      // Mark loading done on first event (INITIAL_SESSION or SIGNED_IN etc.)
+      setLoading(false);
     });
 
     return () => subscription.unsubscribe();
