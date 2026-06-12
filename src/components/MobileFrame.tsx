@@ -14,7 +14,7 @@ const tabs = [
 
 export function MobileFrame({ children, immersive = false }: { children: ReactNode; immersive?: boolean }) {
   const { pathname } = useLocation();
-  const { user, credits, signOut } = useAuth();
+  const { user, credits, loading, signOut } = useAuth();
   const [showAuth, setShowAuth] = useState(false);
 
   return (
@@ -56,7 +56,7 @@ export function MobileFrame({ children, immersive = false }: { children: ReactNo
 
         {/* Auth + Create CTA */}
         <div className="px-4 pb-6 space-y-3">
-          {user ? (
+          {loading ? null : user ? (
             <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-secondary border border-border">
               <div className="size-7 rounded-full bg-violet-600 flex items-center justify-center shrink-0">
                 <User className="size-3.5 text-white" />
@@ -77,7 +77,7 @@ export function MobileFrame({ children, immersive = false }: { children: ReactNo
               <LogIn className="size-4" />
               Sign in
             </button>
-          )}
+          ) /* end loading ? null : user ? */}
 
           <Link
             to="/feed"
@@ -131,8 +131,8 @@ export function MobileFrame({ children, immersive = false }: { children: ReactNo
             );
           })}
 
-          {/* Auth button in mobile tab bar */}
-          {!user && (
+          {/* Auth button in mobile tab bar — hidden while loading to prevent flash */}
+          {!loading && !user && (
             <button
               onClick={() => setShowAuth(true)}
               className="flex flex-col items-center gap-1 w-16 text-muted-foreground"

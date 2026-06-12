@@ -69,17 +69,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    let initialised = false;
+
     supabase.auth.getSession().then(({ data }) => {
       const u = data.session?.user ?? null;
       setUser(u);
       void loadProfile(u);
       setLoading(false);
+      initialised = true;
     });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      // Ignore SIGNED_OUT fired before getSession() finishes — it's a Supabase
+      // initialisation artefact and would incorrectly clear a stored session.
+      if (!initialised && event === "SIGNED_OUT") return;
       const u = session?.user ?? null;
       setUser(u);
       void loadProfile(u);
+      if (!initialised) { setLoading(false); initialised = true; }
     });
+
     return () => subscription.unsubscribe();
   }, [loadProfile]);
 
