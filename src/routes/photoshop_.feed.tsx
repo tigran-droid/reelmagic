@@ -106,6 +106,7 @@ function PhotoshopFeed() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pendingRef = useRef<Item | null>(null);
   const didJumpRef = useRef(false);
+  const continuedRef = useRef(false);
 
   const q = useQuery({
     queryKey: ["photoshop-feed", targetId ?? null],
@@ -205,6 +206,15 @@ function PhotoshopFeed() {
     const el = scrollerRef.current;
     if (!el || items.length === 0) return;
     const next = Math.round(el.scrollTop / el.clientHeight);
+    // Scrolled past the last reel onto the continuation slide — flow naturally
+    // into the Photoshop browse page so the feed never dead-ends.
+    if (next >= items.length) {
+      if (!continuedRef.current) {
+        continuedRef.current = true;
+        navigate({ to: "/photoshop" });
+      }
+      return;
+    }
     const clamped = Math.max(0, Math.min(items.length - 1, next));
     if (clamped !== activeIndex) {
       setActiveIndex(clamped);
@@ -309,6 +319,12 @@ function PhotoshopFeed() {
             </div>
           </ReelCard>
         ))}
+        {/* Continuation slide — scrolling past the last reel slides here, then
+            naturally lands on the Photoshop browse page (no abrupt page jump). */}
+        <div className="relative h-dvh w-full snap-start snap-always overflow-hidden bg-black flex flex-col items-center justify-center gap-3 text-white/70">
+          <Sparkles className="size-7 animate-pulse" />
+          <p className="text-sm font-semibold">Keep exploring templates…</p>
+        </div>
       </div>
     </MobileFrame>
   );

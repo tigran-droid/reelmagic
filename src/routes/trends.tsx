@@ -15,7 +15,7 @@ export const Route = createFileRoute("/trends")({
   component: Trends,
 });
 
-type Tile = { cover: string; title: string; hashtags: string[] };
+type Tile = { id: string; cover: string; title: string; hashtags: string[] };
 
 const TABS = ["All", "Photo", "AI trends", "Portrait"];
 const PILLS = ["For You", "Trending", "New", "Cinematic", "Retro", "Anime"];
@@ -26,15 +26,17 @@ function Trends() {
   const [activePill, setActivePill] = useState("For You");
 
   const { data, isPending } = useQuery({
-    queryKey: ["trends-reels"],
+    queryKey: ["trends-photoshop-items"],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("reels")
-        .select("id,title,hashtags,image_url,image_urls")
+        .from("photoshop_items")
+        .select("id,title,hashtags,image_url,image_urls,position,created_at")
+        .order("position")
         .order("created_at", { ascending: false })
-        .limit(24);
+        .limit(120);
       if (error) throw error;
       return data.map<Tile>((r) => ({
+        id: r.id,
         cover: (r.image_urls && r.image_urls[0]) || r.image_url,
         title: r.title,
         hashtags: r.hashtags ?? [],
@@ -50,7 +52,7 @@ function Trends() {
   const col2 = tiles.filter((_, i) => i % 2 === 1);
   const skeletons = Array.from({ length: 6 });
 
-  const open = () => navigate({ to: "/photoshop" });
+  const open = (id: string) => navigate({ to: "/photoshop/feed", search: { item: id } });
 
   return (
     <MobileFrame>
@@ -131,13 +133,13 @@ function Trends() {
               {/* col 1 — normal */}
               <div className="flex flex-col gap-1.5">
                 {col1.map((t, i) => (
-                  <TrendCard key={`a-${i}`} tile={t} onClick={open} />
+                  <TrendCard key={`a-${i}`} tile={t} onClick={() => open(t.id)} />
                 ))}
               </div>
               {/* col 2 — staggered down */}
               <div className="flex flex-col gap-1.5 pt-10">
                 {col2.map((t, i) => (
-                  <TrendCard key={`b-${i}`} tile={t} onClick={open} />
+                  <TrendCard key={`b-${i}`} tile={t} onClick={() => open(t.id)} />
                 ))}
               </div>
             </div>
