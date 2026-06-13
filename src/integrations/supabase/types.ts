@@ -209,6 +209,8 @@ export type Database = {
           email: string | null
           id: string
           is_admin: boolean
+          display_name: string | null
+          avatar_url: string | null
         }
         Insert: {
           created_at?: string
@@ -216,6 +218,8 @@ export type Database = {
           email?: string | null
           id: string
           is_admin?: boolean
+          display_name?: string | null
+          avatar_url?: string | null
         }
         Update: {
           created_at?: string
@@ -223,6 +227,32 @@ export type Database = {
           email?: string | null
           id?: string
           is_admin?: boolean
+          display_name?: string | null
+          avatar_url?: string | null
+        }
+        Relationships: []
+      }
+      user_images: {
+        Row: {
+          id: string
+          user_id: string
+          image_url: string
+          template_title: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          image_url: string
+          template_title?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          image_url?: string
+          template_title?: string | null
+          created_at?: string
         }
         Relationships: []
       }

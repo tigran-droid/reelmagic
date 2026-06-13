@@ -1,5 +1,5 @@
 import { Link, useLocation } from "@tanstack/react-router";
-import { ImagePlus, MapPin, Sparkles, Wand2, LogIn, LogOut, User, CreditCard, Coins } from "lucide-react";
+import { ImagePlus, MapPin, Sparkles, Wand2, LogIn, LogOut, User, Coins, UserCircle } from "lucide-react";
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth-context";
@@ -7,8 +7,8 @@ import { AuthModal } from "@/components/AuthModal";
 
 const tabs = [
   { to: "/photoshop", label: "Photoshop", icon: ImagePlus },
-  { to: "/trends", label: "Local", icon: MapPin },
-  { to: "/pricing", label: "Pricing", icon: CreditCard },
+  { to: "/trends",   label: "Local",      icon: MapPin },
+  { to: "/account",  label: "Account",    icon: UserCircle },
 ] as const;
 
 export function MobileFrame({ children, immersive = false }: { children: ReactNode; immersive?: boolean }) {

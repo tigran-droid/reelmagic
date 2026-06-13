@@ -16,6 +16,7 @@ import { invokeEdgeFunction } from "@/lib/edge-functions";
 import { useAuth, PHOTO_COST } from "@/lib/auth-context";
 import { AuthModal } from "@/components/AuthModal";
 import { PaywallModal } from "@/components/PaywallModal";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/create")({
   head: () => ({
@@ -53,6 +54,15 @@ type ChatMessage =
     }
   | { id: string; role: "assistant"; kind: "result"; imageDataUrl: string }
   | { id: string; role: "assistant"; kind: "error"; text: string };
+
+function dataUrlToBlob(dataUrl: string): Blob {
+  const [header, data] = dataUrl.split(",");
+  const mime = header.match(/:(.*?);/)?.[1] ?? "image/jpeg";
+  const binary = atob(data);
+  const arr = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) arr[i] = binary.charCodeAt(i);
+  return new Blob([arr], { type: mime });
+}
 
 const DRAFT_KEY = "create:draft";
 const USER_IMAGES_KEY = "create:userImages";
@@ -282,6 +292,27 @@ function CreatePage() {
       );
       // Charge credits for the successful generation
       void deductCredits(PHOTO_COST);
+
+      // Save to user gallery (fire-and-forget — don't block the UI)
+      if (user) {
+        void (async () => {
+          try {
+            // Upload image to storage
+            const blob = dataUrlToBlob(imageDataUrl);
+            const path = `${user.id}/${crypto.randomUUID()}.jpg`;
+            const { error: upErr } = await supabase.storage
+              .from("user-images")
+              .upload(path, blob, { contentType: "image/jpeg" });
+            if (upErr) return;
+            const { data: pub } = supabase.storage.from("user-images").getPublicUrl(path);
+            await supabase.from("user_images").insert({
+              user_id: user.id,
+              image_url: pub.publicUrl,
+              template_title: reel?.title ?? null,
+            });
+          } catch { /* silent — gallery save is non-critical */ }
+        })();
+      }
     } catch (e) {
       const text = e instanceof Error ? e.message : "Failed";
       setMessages((m) =>
