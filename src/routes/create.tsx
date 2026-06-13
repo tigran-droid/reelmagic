@@ -304,10 +304,9 @@ function CreatePage() {
               .from("user-images")
               .upload(path, blob, { contentType: "image/jpeg" });
             if (upErr) return;
-            const { data: pub } = supabase.storage.from("user-images").getPublicUrl(path);
             await supabase.from("user_images").insert({
               user_id: user.id,
-              image_url: pub.publicUrl,
+              image_url: path,
               template_title: reel?.title ?? null,
             });
           } catch { /* silent — gallery save is non-critical */ }

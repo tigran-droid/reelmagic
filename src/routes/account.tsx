@@ -51,34 +51,65 @@ function AccountPage() {
   const avatarPickerRef = useRef<HTMLInputElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
 
-  // Load profile
+  // Signed-URL TTL (1 hour — fresh on every Account page load)
+  const SIGN_TTL = 60 * 60;
+
+  // Load profile — avatar_url stores a storage path; sign it on read.
   useEffect(() => {
     if (!user) return;
-    supabase
-      .from("profiles")
-      .select("display_name, avatar_url")
-      .eq("id", user.id)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (!data) return;
-        setDisplayName(data.display_name ?? "");
-        setAvatarUrl(data.avatar_url ?? null);
-      });
+    (async () => {
+      const { data } = await supabase
+        .from("profiles")
+        .select("display_name, avatar_url")
+        .eq("id", user.id)
+        .maybeSingle();
+      if (!data) return;
+      setDisplayName(data.display_name ?? "");
+      if (data.avatar_url) {
+        const { data: signed } = await supabase.storage
+          .from("avatars")
+          .createSignedUrl(data.avatar_url, SIGN_TTL);
+        setAvatarUrl(signed?.signedUrl ?? null);
+      } else {
+        setAvatarUrl(null);
+      }
+    })();
   }, [user]);
 
-  // Load generated images
+  // Load generated images — image_url stores a storage path; batch-sign on read.
   useEffect(() => {
     if (!user) return;
     setLoadingImages(true);
-    supabase
-      .from("user_images")
-      .select("id, image_url, template_title, created_at")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-      .then(({ data }) => {
-        setImages((data as UserImage[]) ?? []);
+    (async () => {
+      const { data } = await supabase
+        .from("user_images")
+        .select("id, image_url, template_title, created_at")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+      const rows = data ?? [];
+      if (rows.length === 0) {
+        setImages([]);
         setLoadingImages(false);
+        return;
+      }
+      const paths = rows.map((r) => r.image_url);
+      const { data: signed } = await supabase.storage
+        .from("user-images")
+        .createSignedUrls(paths, SIGN_TTL);
+      const byPath = new Map<string, string>();
+      signed?.forEach((s, i) => {
+        if (s.signedUrl) byPath.set(paths[i], s.signedUrl);
       });
+      setImages(
+        rows.map((r) => ({
+          id: r.id,
+          template_title: r.template_title,
+          created_at: r.created_at,
+          image_url: byPath.get(r.image_url) ?? "",
+        })),
+      );
+      setLoadingImages(false);
+    })();
   }, [user]);
 
   // ── avatar upload ──
@@ -94,10 +125,11 @@ function AccountPage() {
         .from("avatars")
         .upload(path, file, { upsert: true, contentType: file.type });
       if (upErr) throw upErr;
-      const { data: pub } = supabase.storage.from("avatars").getPublicUrl(path);
-      const url = `${pub.publicUrl}?t=${Date.now()}`;
-      await supabase.from("profiles").update({ avatar_url: url }).eq("id", user.id);
-      setAvatarUrl(url);
+      await supabase.from("profiles").update({ avatar_url: path }).eq("id", user.id);
+      const { data: signed } = await supabase.storage
+        .from("avatars")
+        .createSignedUrl(path, SIGN_TTL);
+      setAvatarUrl(signed?.signedUrl ?? null);
     } catch (err) {
       console.error("Avatar upload failed", err);
     } finally {

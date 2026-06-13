@@ -124,6 +124,36 @@ export type Database = {
         }
         Relationships: []
       }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          credits: number
+          display_name: string | null
+          email: string | null
+          id: string
+          is_admin: boolean
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          credits?: number
+          display_name?: string | null
+          email?: string | null
+          id: string
+          is_admin?: boolean
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          credits?: number
+          display_name?: string | null
+          email?: string | null
+          id?: string
+          is_admin?: boolean
+        }
+        Relationships: []
+      }
       reels: {
         Row: {
           audio_end_sec: number | null
@@ -166,6 +196,30 @@ export type Database = {
         }
         Relationships: []
       }
+      user_images: {
+        Row: {
+          created_at: string
+          id: string
+          image_url: string
+          template_title: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          image_url: string
+          template_title?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          image_url?: string
+          template_title?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       video_items: {
         Row: {
           cover_image_url: string
@@ -202,77 +256,17 @@ export type Database = {
         }
         Relationships: []
       }
-      profiles: {
-        Row: {
-          created_at: string
-          credits: number
-          email: string | null
-          id: string
-          is_admin: boolean
-          display_name: string | null
-          avatar_url: string | null
-        }
-        Insert: {
-          created_at?: string
-          credits?: number
-          email?: string | null
-          id: string
-          is_admin?: boolean
-          display_name?: string | null
-          avatar_url?: string | null
-        }
-        Update: {
-          created_at?: string
-          credits?: number
-          email?: string | null
-          id?: string
-          is_admin?: boolean
-          display_name?: string | null
-          avatar_url?: string | null
-        }
-        Relationships: []
-      }
-      user_images: {
-        Row: {
-          id: string
-          user_id: string
-          image_url: string
-          template_title: string | null
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          user_id: string
-          image_url: string
-          template_title?: string | null
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          user_id?: string
-          image_url?: string
-          template_title?: string | null
-          created_at?: string
-        }
-        Relationships: []
-      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      deduct_credits: {
-        Args: { p_amount: number }
-        Returns: number
-      }
       admin_add_credits: {
-        Args: { p_email: string; p_amount: number }
+        Args: { p_amount: number; p_email: string }
         Returns: number
       }
-      is_admin: {
-        Args: { uid: string }
-        Returns: boolean
-      }
+      deduct_credits: { Args: { p_amount: number }; Returns: number }
+      is_admin: { Args: { uid: string }; Returns: boolean }
     }
     Enums: {
       [_ in never]: never
