@@ -47,9 +47,7 @@ function Trends() {
   });
 
   const tiles = data ?? [];
-  const col1 = tiles.filter((_, i) => i % 2 === 0);
-  const col2 = tiles.filter((_, i) => i % 2 === 1);
-  const skeletons = Array.from({ length: 6 });
+  const skeletons = Array.from({ length: 10 });
 
   const open = (id: string) => navigate({ to: "/photoshop/feed", search: { item: id, from: "local" } });
 
@@ -60,11 +58,11 @@ function Trends() {
         {/* ── Header ── */}
         <div className="sticky top-0 z-20 bg-[#f5f5f7]/98 backdrop-blur-md border-b border-black/5">
           {/* Tab row */}
-          <div className="flex items-center px-4 pt-12 md:pt-5 border-b border-black/5">
-            {/* X close button */}
+          <div className="flex items-center px-4 md:px-5 pt-12 md:pt-5 border-b border-black/5 max-w-[1280px] mx-auto w-full">
+            {/* X close button — mobile only (desktop has the sidebar) */}
             <button
               onClick={() => navigate({ to: "/photoshop" })}
-              className="size-8 grid place-items-center shrink-0 mr-3 rounded-full bg-black/6 text-black active:bg-black/10 transition-colors"
+              className="md:hidden size-8 grid place-items-center shrink-0 mr-3 rounded-full bg-black/6 text-black active:bg-black/10 transition-colors"
             >
               <X className="size-4" strokeWidth={2.5} />
             </button>
@@ -89,7 +87,7 @@ function Trends() {
           </div>
 
           {/* Pills row */}
-          <div className="flex gap-1.5 px-3 py-2.5 overflow-x-auto no-scrollbar">
+          <div className="flex gap-1.5 px-3 md:px-5 py-2.5 overflow-x-auto no-scrollbar max-w-[1280px] mx-auto w-full">
             {PILLS.map((pill) => (
               <button
                 key={pill}
@@ -107,19 +105,15 @@ function Trends() {
         </div>
 
         {/* ── Grid ── */}
-        <div className="px-1.5 pt-1.5 pb-36">
+        <div className="mx-auto max-w-[1280px] px-1.5 md:px-5 pt-1.5 md:pt-5 pb-36 md:pb-10">
           {isPending ? (
-            <div className="grid grid-cols-2 gap-1.5">
-              <div className="flex flex-col gap-1.5">
-                {skeletons.slice(0, 3).map((_, i) => (
-                  <div key={i} className="w-full rounded-lg bg-gray-200 aspect-[9/16] animate-pulse" />
-                ))}
-              </div>
-              <div className="flex flex-col gap-1.5 pt-10">
-                {skeletons.slice(3).map((_, i) => (
-                  <div key={i} className="w-full rounded-lg bg-gray-200 aspect-[9/16] animate-pulse" />
-                ))}
-              </div>
+            <div className="columns-2 md:columns-4 lg:columns-5 gap-1.5 md:gap-3">
+              {skeletons.map((_, i) => (
+                <div
+                  key={i}
+                  className="mb-1.5 md:mb-3 break-inside-avoid w-full rounded-lg bg-gray-200 aspect-[9/16] animate-pulse"
+                />
+              ))}
             </div>
           ) : tiles.length === 0 ? (
             <div className="flex flex-col items-center gap-3 py-20 text-center">
@@ -128,19 +122,10 @@ function Trends() {
               <p className="text-xs text-gray-400">Add some from the admin panel</p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-1.5">
-              {/* col 1 — normal */}
-              <div className="flex flex-col gap-1.5">
-                {col1.map((t, i) => (
-                  <TrendCard key={`a-${i}`} tile={t} onClick={() => open(t.id)} />
-                ))}
-              </div>
-              {/* col 2 — staggered down */}
-              <div className="flex flex-col gap-1.5 pt-10">
-                {col2.map((t, i) => (
-                  <TrendCard key={`b-${i}`} tile={t} onClick={() => open(t.id)} />
-                ))}
-              </div>
+            <div className="columns-2 md:columns-4 lg:columns-5 gap-1.5 md:gap-3">
+              {tiles.map((t) => (
+                <TrendCard key={t.id} tile={t} onClick={() => open(t.id)} />
+              ))}
             </div>
           )}
         </div>
@@ -153,7 +138,7 @@ function Trends() {
 
 function TrendCard({ tile, onClick }: { tile: Tile; onClick: () => void }) {
   return (
-    <button onClick={onClick} className="w-full text-left active:scale-[0.97] transition-transform">
+    <button onClick={onClick} className="mb-1.5 md:mb-3 break-inside-avoid w-full text-left active:scale-[0.97] transition-transform">
       {/* Image */}
       <div className="relative w-full rounded-lg overflow-hidden bg-gray-200 aspect-[9/16] shadow-sm">
         {tile.cover ? (
