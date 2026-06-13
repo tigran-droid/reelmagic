@@ -9,7 +9,8 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const IMAGE_GENERATION_MODEL = "gemini-2.0-flash-exp";
+const IMAGE_GENERATION_MODEL = "gemini-3.1-flash-image";
+const IMAGE_FALLBACK_MODEL = "gemini-2.0-flash-exp";
 const MAX_IMAGE_BYTES = 360_000;
 const TEMPLATE_MAX_DIM = 640;
 const USER_REF_MAX_DIM = 704;
@@ -482,6 +483,13 @@ async function callGemini(
         generationConfig: {
           responseModalities: ["IMAGE"],
         },
+        safetySettings: [
+          { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+          { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+          { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+          { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
+          { category: "HARM_CATEGORY_CIVIC_INTEGRITY", threshold: "BLOCK_NONE" },
+        ],
       }),
       signal: controller.signal,
     });
@@ -540,6 +548,27 @@ async function generateImage(body: Record<string, unknown>, geminiKey: string) {
   if (!result.ok) return { error: result.error, errorCode: result.errorCode, fallback: true };
 
   let imageDataUrl = extractImageDataUrl(result.json);
+
+  // If the high-quality model was blocked (IMAGE_OTHER / no image), retry this
+  // single image with the more permissive fallback model so the user still gets a result.
+  if (!imageDataUrl && model !== IMAGE_FALLBACK_MODEL) {
+    console.warn(
+      "[generate-from-template] primary model returned no image, retrying with fallback model",
+      IMAGE_FALLBACK_MODEL,
+    );
+    const fallbackResult = await callGemini(
+      geminiKey,
+      parts,
+      imageCount,
+      startedAt,
+      "fallback",
+      IMAGE_FALLBACK_MODEL,
+    );
+    if (fallbackResult.ok) {
+      imageDataUrl = extractImageDataUrl(fallbackResult.json);
+    }
+  }
+
   if (!imageDataUrl) {
     const detail = getNoImageDetail(result.json) ||
       (result.modelText ? ` AI replied with text instead: ${result.modelText.slice(0, 220)}` : "");
