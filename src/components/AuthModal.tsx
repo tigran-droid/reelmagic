@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { X, Mail, Lock, Sparkles, Eye, EyeOff, Loader2, Coins } from "lucide-react";
-import { useAuth, PHOTO_COST, VIDEO_COST, FREE_CREDITS } from "@/lib/auth-context";
+import { X, Mail, Lock, Sparkles, Eye, EyeOff, Loader2 } from "lucide-react";
+import { useAuth, FREE_CREDITS } from "@/lib/auth-context";
+import { useToast } from "@/components/Toast";
 
 type Mode = "login" | "signup";
 
@@ -17,6 +18,7 @@ function GoogleIcon() {
 
 export function AuthModal({ onClose, defaultMode = "signup" }: { onClose: () => void; defaultMode?: Mode }) {
   const { signIn, signUp, signInWithGoogle } = useAuth();
+  const { show: showToast } = useToast();
   const [mode, setMode] = useState<Mode>(defaultMode);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -43,7 +45,11 @@ export function AuthModal({ onClose, defaultMode = "signup" }: { onClose: () => 
       : await signIn(email, password);
     setLoading(false);
     if (err) { setError(err); return; }
-    if (mode === "signup") { setDone(true); return; }
+    if (mode === "signup") {
+      setDone(true);
+      showToast(`🎉 You have ${FREE_CREDITS} free credits!`, "Start creating your first photo now.");
+      return;
+    }
     onClose();
   }
 
@@ -91,20 +97,6 @@ export function AuthModal({ onClose, defaultMode = "signup" }: { onClose: () => 
                 : "Sign in to continue creating"}
             </p>
 
-            {/* Free credits welcome — signup only */}
-            {mode === "signup" && (
-              <div className="flex items-start gap-3 bg-amber-500/10 border border-amber-500/25 rounded-2xl px-4 py-3 mb-5">
-                <Coins className="size-4 text-amber-400 shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-xs font-bold text-amber-300">
-                    {FREE_CREDITS} free credits on sign up
-                  </p>
-                  <p className="text-[11px] text-white/50 mt-0.5 leading-relaxed">
-                    1 photo = {PHOTO_COST} credits &nbsp;·&nbsp; 1 video = {VIDEO_COST} credits
-                  </p>
-                </div>
-              </div>
-            )}
 
             {/* Google button */}
             <button
