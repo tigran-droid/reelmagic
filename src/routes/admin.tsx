@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
-import { Upload, Image as ImageIcon, Music, Loader2, Trash2, Pencil, X, Check, Plus, ArrowUp, ArrowDown, Video as VideoIcon, FileText, Search, Coins } from "lucide-react";
+import { Upload, Image as ImageIcon, Music, Loader2, Trash2, Pencil, X, Check, Plus, Minus, ArrowUp, ArrowDown, Video as VideoIcon, FileText, Search, Coins } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AudioTrimmer } from "@/components/AudioTrimmer";
 import { useAuth } from "@/lib/auth-context";
@@ -140,24 +140,29 @@ function UsersAdmin({ isAdmin }: { isAdmin: boolean }) {
 }
 
 function UserRow({ user, onGranted }: { user: ProfileRow; onGranted: () => void }) {
-  const [amount, setAmount] = useState("100");
+  const [amount, setAmount] = useState("10");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [isError, setIsError] = useState(false);
 
-  const grant = async () => {
+  const adjust = async (sign: 1 | -1) => {
     const n = parseInt(amount, 10);
-    if (!user.email || !Number.isFinite(n) || n === 0) return;
+    if (!user.email || !Number.isFinite(n) || n <= 0) return;
     setBusy(true);
     setMsg(null);
+    setIsError(false);
     const { data, error } = await supabase.rpc("admin_add_credits", {
       p_email: user.email,
-      p_amount: n,
+      p_amount: n * sign,
     });
     setBusy(false);
-    if (error) { setMsg(error.message); return; }
-    setMsg(`✓ New balance: ${data}`);
+    if (error) { setMsg(error.message); setIsError(true); return; }
+    setMsg(`Balance: ${data} credits`);
     onGranted();
   };
+
+  const parsed = parseInt(amount, 10);
+  const valid = Number.isFinite(parsed) && parsed > 0;
 
   return (
     <div className="bg-card border border-border rounded-xl p-3">
@@ -176,29 +181,46 @@ function UserRow({ user, onGranted }: { user: ProfileRow; onGranted: () => void 
           </p>
         </div>
 
+        {/* Current balance */}
         <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-background border border-border">
           <Coins className="size-3.5 text-amber-500" />
           <span className="text-sm font-bold tabular-nums">{user.credits}</span>
         </div>
 
-        <div className="flex items-center gap-1.5">
+        {/* Amount input + Add / Remove buttons */}
+        <div className="flex items-center gap-1">
           <input
             value={amount}
-            onChange={(e) => setAmount(e.target.value.replace(/[^0-9-]/g, ""))}
-            className="w-16 bg-background border border-border rounded-lg px-2 py-1.5 text-sm text-center"
+            onChange={(e) => setAmount(e.target.value.replace(/[^0-9]/g, ""))}
+            className="w-14 bg-background border border-border rounded-lg px-2 py-1.5 text-sm text-center tabular-nums"
             inputMode="numeric"
+            placeholder="10"
           />
           <button
-            onClick={grant}
-            disabled={busy}
-            className="inline-flex items-center gap-1 bg-brand text-white text-xs font-semibold rounded-lg px-3 py-1.5 disabled:opacity-60"
+            onClick={() => adjust(-1)}
+            disabled={busy || !valid}
+            title="Remove credits"
+            className="inline-flex items-center gap-1 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold rounded-lg px-2.5 py-1.5 disabled:opacity-40 transition-colors"
+          >
+            {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Minus className="size-3.5" />}
+            Remove
+          </button>
+          <button
+            onClick={() => adjust(1)}
+            disabled={busy || !valid}
+            title="Add credits"
+            className="inline-flex items-center gap-1 bg-brand hover:bg-brand/90 text-white text-xs font-semibold rounded-lg px-2.5 py-1.5 disabled:opacity-40 transition-colors"
           >
             {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Plus className="size-3.5" />}
             Add
           </button>
         </div>
       </div>
-      {msg && <p className="text-[11px] text-muted-foreground mt-2">{msg}</p>}
+      {msg && (
+        <p className={`text-[11px] mt-2 ${isError ? "text-red-400" : "text-green-400"}`}>
+          {msg}
+        </p>
+      )}
     </div>
   );
 }
