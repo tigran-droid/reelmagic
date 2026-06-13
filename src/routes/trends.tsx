@@ -111,12 +111,12 @@ function Trends() {
             <div className="grid grid-cols-2 gap-1.5">
               <div className="flex flex-col gap-1.5">
                 {skeletons.slice(0, 3).map((_, i) => (
-                  <div key={i} className="w-full rounded-2xl bg-gray-200 aspect-[9/16] animate-pulse" />
+                  <div key={i} className="w-full rounded-lg bg-gray-200 aspect-[9/16] animate-pulse" />
                 ))}
               </div>
               <div className="flex flex-col gap-1.5 pt-10">
                 {skeletons.slice(3).map((_, i) => (
-                  <div key={i} className="w-full rounded-2xl bg-gray-200 aspect-[9/16] animate-pulse" />
+                  <div key={i} className="w-full rounded-lg bg-gray-200 aspect-[9/16] animate-pulse" />
                 ))}
               </div>
             </div>
@@ -169,7 +169,7 @@ function TrendCard({ tile, onClick }: { tile: Tile; onClick: () => void }) {
   return (
     <button onClick={onClick} className="w-full text-left active:scale-[0.97] transition-transform">
       {/* Image */}
-      <div className="relative w-full rounded-2xl overflow-hidden bg-gray-200 aspect-[9/16] shadow-sm">
+      <div className="relative w-full rounded-lg overflow-hidden bg-gray-200 aspect-[9/16] shadow-sm">
         {tile.cover ? (
           <img
             src={tile.cover}
