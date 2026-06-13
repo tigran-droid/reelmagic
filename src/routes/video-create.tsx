@@ -1,17 +1,15 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
   ArrowLeft,
   Download,
   Loader2,
-  Mic,
-  Plus,
-  Send,
   Sparkles,
-  X,
-  History,
-  MessageSquarePlus,
+  Upload,
   Video as VideoIcon,
+  CheckCircle2,
+  AlertCircle,
+  RefreshCw,
 } from "lucide-react";
 import { invokeEdgeFunction } from "@/lib/edge-functions";
 import { useAuth, VIDEO_COST } from "@/lib/auth-context";
@@ -22,10 +20,7 @@ export const Route = createFileRoute("/video-create")({
   head: () => ({
     meta: [
       { title: "Create Video — Magic Studio" },
-      {
-        name: "description",
-        content: "Recreate any video template with your own photo using AI.",
-      },
+      { name: "description", content: "Recreate any video template with your own photo using AI." },
     ],
   }),
   component: VideoCreatePage,
@@ -41,293 +36,211 @@ type VideoItem = {
   prompt: string;
 };
 
-type ChatMessage =
-  | { id: string; role: "user"; kind: "images"; images: string[] }
-  | { id: string; role: "user"; kind: "text"; text: string }
-  | { id: string; role: "assistant"; kind: "ref"; templateUrl: string; label: string }
-  | { id: string; role: "assistant"; kind: "status"; text: string }
-  | { id: string; role: "assistant"; kind: "image"; imageDataUrl: string; caption?: string }
-  | { id: string; role: "assistant"; kind: "video"; videoUrl: string }
-  | { id: string; role: "assistant"; kind: "error"; text: string };
+type Phase = "upload" | "photo" | "video" | "done" | "error";
 
 const ITEM_KEY = "video-create:item";
 const USER_IMAGES_KEY = "video-create:userImages";
-// Single cheapest image-to-video model. No fallback loop — each retry is a paid call.
-const VIDEO_DURATION_SECONDS = 5;
-const VIDEO_RESOLUTION = "480p";
-const VIDEO_COST_PER_SECOND_USD = 0.05;
-const ESTIMATED_COST_USD = VIDEO_DURATION_SECONDS * VIDEO_COST_PER_SECOND_USD;
 const UPLOAD_IMAGE_MAX_EDGE = 1536;
 const UPLOAD_IMAGE_QUALITY = 0.82;
+const VIDEO_DURATION_SECONDS = 5;
+const VIDEO_RESOLUTION = "480p";
 
-function uid() {
-  return Math.random().toString(36).slice(2);
-}
+function uid() { return Math.random().toString(36).slice(2); }
 
 function fileToDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
+  return new Promise((res, rej) => {
     const r = new FileReader();
-    r.onload = () => resolve(r.result as string);
-    r.onerror = () => reject(r.error);
+    r.onload = () => res(r.result as string);
+    r.onerror = () => rej(r.error);
     r.readAsDataURL(file);
   });
 }
 
-function loadImage(dataUrl: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error("Failed to load selected image"));
-    img.src = dataUrl;
-  });
-}
-
-async function optimizeImageForUpload(file: File): Promise<string> {
-  const originalDataUrl = await fileToDataUrl(file);
-
+async function optimizeImage(file: File): Promise<string> {
+  const raw = await fileToDataUrl(file);
   try {
-    const image = await loadImage(originalDataUrl);
-    const longestEdge = Math.max(image.naturalWidth, image.naturalHeight);
-    const scale = Math.min(1, UPLOAD_IMAGE_MAX_EDGE / Math.max(longestEdge, 1));
-    const width = Math.max(1, Math.round(image.naturalWidth * scale));
-    const height = Math.max(1, Math.round(image.naturalHeight * scale));
-
-    if (scale === 1 && file.size < 1_500_000) return originalDataUrl;
-
-    const canvas = document.createElement("canvas");
-    canvas.width = width;
-    canvas.height = height;
-
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return originalDataUrl;
-
-    ctx.drawImage(image, 0, 0, width, height);
-    return canvas.toDataURL("image/jpeg", UPLOAD_IMAGE_QUALITY);
-  } catch {
-    return originalDataUrl;
-  }
+    const img = await new Promise<HTMLImageElement>((res, rej) => {
+      const i = new Image();
+      i.onload = () => res(i);
+      i.onerror = () => rej(new Error("load"));
+      i.src = raw;
+    });
+    const scale = Math.min(1, UPLOAD_IMAGE_MAX_EDGE / Math.max(img.naturalWidth, img.naturalHeight, 1));
+    if (scale === 1 && file.size < 1_500_000) return raw;
+    const w = Math.round(img.naturalWidth * scale);
+    const h = Math.round(img.naturalHeight * scale);
+    const c = document.createElement("canvas");
+    c.width = w; c.height = h;
+    c.getContext("2d")!.drawImage(img, 0, 0, w, h);
+    return c.toDataURL("image/jpeg", UPLOAD_IMAGE_QUALITY);
+  } catch { return raw; }
 }
+
+/**
+ * Build a motion-focused prompt for the WAN image-to-video model.
+ * The template's `prompt` field is written for Gemini photo generation (scene/identity),
+ * NOT for video animation. WAN 2.5 needs motion language.
+ */
+function buildVideoPrompt(item: VideoItem): string {
+  const motion = [
+    "cinematic slow zoom in",
+    "subtle natural hair movement",
+    "gentle breathing",
+    "smooth camera drift",
+    "soft bokeh background",
+    "realistic cloth motion",
+    "photorealistic",
+    "high quality",
+  ].join(", ");
+
+  // Add brief style hint from template title (e.g. "Glam" → "glam style")
+  const titleHint = item.title ? `, ${item.title.toLowerCase()} style` : "";
+  return motion + titleHint;
+}
+
+function sleep(ms: number) { return new Promise((r) => setTimeout(r, ms)); }
+
+// ── Main page ─────────────────────────────────────────────────────────────────
 
 function VideoCreatePage() {
   const navigate = useNavigate();
   const { user, credits, deductCredits } = useAuth();
+
   const [item, setItem] = useState<VideoItem | null>(null);
-  const [userImages, setUserImages] = useState<string[]>([]);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [busy, setBusy] = useState(false);
+  const [phase, setPhase] = useState<Phase>("upload");
+  const [resultUrl, setResultUrl] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [userPhoto, setUserPhoto] = useState<string | null>(null); // preview of uploaded photo
   const [showAuth, setShowAuth] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
-  const scrollRef = useRef<HTMLDivElement>(null);
   const pickerRef = useRef<HTMLInputElement>(null);
   const didStart = useRef(false);
 
-  const canAfford = credits >= VIDEO_COST;
-
-  // Hydrate from sessionStorage
+  // Load template from sessionStorage
   useEffect(() => {
     if (typeof window === "undefined") return;
     try {
       const raw = sessionStorage.getItem(ITEM_KEY);
-      if (!raw) {
-        navigate({ to: "/" });
-        return;
-      }
+      if (!raw) { navigate({ to: "/" }); return; }
       setItem(JSON.parse(raw) as VideoItem);
-    } catch {
-      navigate({ to: "/" });
-    }
+    } catch { navigate({ to: "/" }); }
   }, [navigate]);
 
-  // Seed conversation (intro + ref to template)
+  // Auto-start if photos were placed in sessionStorage by the upload modal
   useEffect(() => {
-    if (!item) return;
-    setMessages([
-      {
-        id: uid(),
-        role: "assistant",
-        kind: "ref",
-        templateUrl: item.cover_image_url,
-        label: `Create your version of "${item.title}"`,
-      },
-    ]);
+    if (!item || didStart.current) return;
+    const raw = sessionStorage.getItem(USER_IMAGES_KEY);
+    if (!raw) return;
+    try {
+      const imgs = JSON.parse(raw) as string[];
+      sessionStorage.removeItem(USER_IMAGES_KEY);
+      if (imgs.length > 0) {
+        setUserPhoto(imgs[0]);
+        void runGeneration(item, imgs);
+      }
+    } catch {}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item]);
 
-  // Auto-scroll
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-  }, [messages]);
+  const runGeneration = async (tmpl: VideoItem, imgs: string[]) => {
+    if (didStart.current) return;
+    if (!user) { setShowAuth(true); return; }
+    if (credits < VIDEO_COST) { setShowPaywall(true); return; }
 
-  const runFullGeneration = async (imgs: string[]) => {
-    if (!item || imgs.length === 0) return;
-    if (didStart.current) {
-      // Hard guard against duplicate submissions / double-clicks / re-entry.
-      return;
-    }
     didStart.current = true;
-    setBusy(true);
-    let statusId = uid();
-    setMessages((m) => [
-      ...m,
-      { id: statusId, role: "assistant", kind: "status", text: "Optimizing photos and generating your photo…" },
-    ]);
 
     try {
-      // STEP 1 — image
+      // ── Step 1: Gemini photo generation ───────────────────────────────────
+      setPhase("photo");
       const imgData = await invokeEdgeFunction<
         { templateUrl: string; userImages: string[] },
         { imageDataUrl?: string; error?: string; fallback?: boolean }
-      >(
-        "generate-from-template",
-        {
-          body: { templateUrl: item.cover_image_url, userImages: imgs },
-        },
-      );
-      if (imgData?.fallback && imgData?.error) throw new Error(imgData.error);
+      >("generate-from-template", {
+        body: { templateUrl: tmpl.cover_image_url, userImages: imgs },
+      });
+
       if (imgData?.error) throw new Error(imgData.error);
-      const imageDataUrl: string | undefined = imgData?.imageDataUrl;
-      if (!imageDataUrl) throw new Error("No image returned");
+      if (!imgData?.imageDataUrl) throw new Error("Photo generation returned no image. Please try again.");
 
-      // Show the generated image, then move into the video phase
-      setMessages((m) =>
-        m
-          .filter((x) => x.id !== statusId)
-          .concat({
-            id: uid(),
-            role: "assistant",
-            kind: "image",
-            imageDataUrl,
-            caption: "Photo ready — now generating your video…",
-          }),
-      );
-
-      statusId = uid();
-      setMessages((m) => [
-        ...m,
-        {
-          id: statusId,
-          role: "assistant",
-          kind: "status",
-          text: `Generating your ${VIDEO_DURATION_SECONDS}s video (${VIDEO_RESOLUTION}) — est. $${ESTIMATED_COST_USD.toFixed(2)}. This takes 30–90 seconds…`,
-        },
-      ]);
-
-      // STEP 2 — start ONE video generation. No automatic retries (each costs money).
-      const maxMs = 5 * 60 * 1000;
-      let videoUrl: string | null = null;
+      // ── Step 2: WAN 2.5 video generation ──────────────────────────────────
+      setPhase("video");
+      const videoPrompt = buildVideoPrompt(tmpl);
 
       const startData = await invokeEdgeFunction<
-        {
-          action: "start";
-          imageDataUrl: string;
-          prompt: string;
-          duration: number;
-          resolution: string;
+        { action: string; imageDataUrl: string; prompt: string; duration: number; resolution: string },
+        { operationName?: string; statusUrl?: string; responseUrl?: string; error?: string }
+      >("generate-video", {
+        body: {
+          action: "start",
+          imageDataUrl: imgData.imageDataUrl,
+          prompt: videoPrompt,
+          duration: VIDEO_DURATION_SECONDS,
+          resolution: VIDEO_RESOLUTION,
         },
-        {
-          operationName?: string;
-          statusUrl?: string;
-          responseUrl?: string;
-          error?: string;
-        }
-      >(
-        "generate-video",
-        {
-          body: {
-            action: "start",
-            imageDataUrl,
-            prompt: item.prompt,
-            duration: VIDEO_DURATION_SECONDS,
-            resolution: VIDEO_RESOLUTION,
-          },
-        },
-      );
-      if (startData?.error) throw new Error(startData.error);
-      const operationName: string | undefined = startData?.operationName;
-      if (!operationName) throw new Error("No operation name returned");
-      const statusUrl: string | undefined = startData?.statusUrl;
-      const responseUrl: string | undefined = startData?.responseUrl;
+      });
 
+      if (startData?.error) throw new Error(startData.error);
+      if (!startData?.operationName) throw new Error("Video generation failed to start.");
+
+      // Poll until done (max 5 minutes)
+      const maxMs = 5 * 60 * 1000;
       const startTs = Date.now();
+      let videoUrl: string | null = null;
+
       while (Date.now() - startTs < maxMs) {
-        await new Promise((r) => setTimeout(r, 6000));
+        await sleep(6000);
         const pollData = await invokeEdgeFunction<
-          {
-            action: "poll";
-            operationName: string;
-            statusUrl?: string;
-            responseUrl?: string;
-          },
+          { action: string; operationName: string; statusUrl?: string; responseUrl?: string },
           { done?: boolean; videoUrl?: string; error?: string }
-        >(
-          "generate-video",
-          { body: { action: "poll", operationName, statusUrl, responseUrl } },
-        );
+        >("generate-video", {
+          body: {
+            action: "poll",
+            operationName: startData.operationName,
+            statusUrl: startData.statusUrl,
+            responseUrl: startData.responseUrl,
+          },
+        });
+
         if (pollData?.done) {
-          if (pollData.videoUrl) {
-            videoUrl = pollData.videoUrl;
-            break;
-          }
-          // Failure: surface error, DO NOT auto-retry with another model.
-          throw new Error(pollData?.error || "Video generation finished but no URL returned");
+          if (pollData.videoUrl) { videoUrl = pollData.videoUrl; break; }
+          throw new Error(pollData.error || "Video generation finished without a result.");
         }
       }
 
-      if (!videoUrl) throw new Error("Video generation timed out");
+      if (!videoUrl) throw new Error("Video generation timed out. Please try again.");
 
-      setMessages((m) =>
-        m
-          .filter((x) => x.id !== statusId)
-          .concat({ id: uid(), role: "assistant", kind: "video", videoUrl: videoUrl! }),
-      );
-      // Charge credits only after a successful video.
+      // Deduct credits only after success
       void deductCredits(VIDEO_COST);
+      setResultUrl(videoUrl);
+      setPhase("done");
+
     } catch (e) {
-      const text = e instanceof Error ? e.message : "Failed";
-      const friendlyText = /timed out/i.test(text)
-        ? "Image generation took too long. Try 1–2 clear face photos and avoid very large uploads."
-        : text;
-      setMessages((m) =>
-        m
-          .filter((x) => x.id !== statusId)
-          .concat({ id: uid(), role: "assistant", kind: "error", text: friendlyText }),
-      );
-    } finally {
-      setBusy(false);
+      const msg = e instanceof Error ? e.message : "Generation failed";
+      setErrorMsg(msg.replace(/function error \d+:/i, "").trim());
+      setPhase("error");
+      didStart.current = false; // allow retry
     }
   };
 
+  // Fallback upload handler (if user navigates directly to /video-create without using the modal)
   const onPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files ?? []).slice(0, 4);
+    const files = Array.from(e.target.files ?? []).slice(0, 1);
     e.target.value = "";
-    if (files.length === 0) return;
-    if (busy || didStart.current) return; // guard against double-pick
-
-    // Auth gate — must be signed in
+    if (!files.length || !item || didStart.current) return;
     if (!user) { setShowAuth(true); return; }
-    // Credit gate — videos are expensive
     if (credits < VIDEO_COST) { setShowPaywall(true); return; }
-    const urls = await Promise.all(files.map(optimizeImageForUpload));
-    setUserImages(urls);
-    sessionStorage.setItem(USER_IMAGES_KEY, JSON.stringify(urls));
-    setMessages((m) => [
-      ...m,
-      { id: uid(), role: "user", kind: "images", images: urls },
-      {
-        id: uid(),
-        role: "assistant",
-        kind: "status",
-        text: `Estimated cost: $${ESTIMATED_COST_USD.toFixed(2)} (${VIDEO_DURATION_SECONDS}s @ ${VIDEO_RESOLUTION}).`,
-      },
-    ]);
-    await runFullGeneration(urls);
+    const urls = await Promise.all(files.map(optimizeImage));
+    setUserPhoto(urls[0]);
+    void runGeneration(item, urls);
   };
 
-  const slugTitle = useMemo(
-    () => (item?.title ?? "video").replace(/\s+/g, "-").toLowerCase(),
-    [item?.title],
-  );
+  const retry = () => {
+    setPhase("upload");
+    setErrorMsg(null);
+    setResultUrl(null);
+    setUserPhoto(null);
+    didStart.current = false;
+  };
 
   if (!item) {
     return (
@@ -337,10 +250,10 @@ function VideoCreatePage() {
     );
   }
 
-  const hasUploaded = userImages.length > 0;
+  const slugTitle = item.title.replace(/\s+/g, "-").toLowerCase();
 
   return (
-    <div className="relative h-dvh flex flex-col bg-[oklch(0.97_0.01_240)] text-foreground">
+    <div className="relative min-h-dvh flex flex-col bg-background text-foreground">
       {showAuth && <AuthModal onClose={() => setShowAuth(false)} defaultMode="signup" />}
       {showPaywall && (
         <PaywallModal
@@ -350,244 +263,204 @@ function VideoCreatePage() {
       )}
 
       {/* Header */}
-      <header className="flex items-center justify-between px-4 pt-3 pb-1">
+      <header className="flex items-center gap-3 px-4 pt-4 pb-2">
         <button
           type="button"
-          onClick={() => window.history.back()}
-          className="size-9 -ml-2 grid place-items-center rounded-full text-foreground/80 active:bg-black/5"
-          aria-label="Back"
+          onClick={() => navigate({ to: "/" })}
+          className="size-9 grid place-items-center rounded-full text-foreground/70 hover:bg-secondary transition-colors"
         >
           <ArrowLeft className="size-5" />
         </button>
-        <div className="flex items-center gap-3">
-          <button type="button" className="size-9 grid place-items-center rounded-md text-foreground/80 active:bg-black/5" aria-label="New chat">
-            <MessageSquarePlus className="size-[22px]" />
-          </button>
-          <button type="button" className="relative size-9 grid place-items-center rounded-md text-foreground/80 active:bg-black/5" aria-label="History">
-            <History className="size-[22px]" />
-            <span className="absolute top-1.5 right-1.5 size-1.5 rounded-full bg-red-500" />
-          </button>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs text-muted-foreground">Creating video from</p>
+          <p className="text-sm font-bold truncate">{item.title}</p>
+        </div>
+        {/* Template thumbnail */}
+        <div className="size-10 rounded-lg overflow-hidden bg-black shrink-0">
+          <img src={item.cover_image_url} alt="" className="w-full h-full object-cover" />
         </div>
       </header>
 
-      <p className="text-center text-[13px] text-muted-foreground pb-1">
-        AI-generated video. Please double-check.
-      </p>
+      <input ref={pickerRef} type="file" accept="image/*" onChange={onPick} className="hidden" />
 
-      {/* Credit / auth indicator */}
-      {!user ? (
-        <div className="mx-4 mb-3 flex items-center justify-between bg-violet-50 border border-violet-200 rounded-xl px-4 py-2.5">
-          <div className="text-xs text-violet-700 font-semibold">Sign in to create videos</div>
-          <button
-            onClick={() => setShowAuth(true)}
-            className="text-xs font-bold text-violet-600 bg-violet-100 hover:bg-violet-200 px-3 py-1.5 rounded-lg transition-colors"
-          >
-            Sign in
-          </button>
-        </div>
-      ) : canAfford ? (
-        <div className="mx-4 mb-3 flex items-center gap-2 bg-violet-50 border border-violet-100 rounded-xl px-4 py-2">
-          <Sparkles className="size-3.5 text-violet-500 shrink-0" />
-          <span className="text-xs text-violet-700 font-medium">
-            <span className="font-extrabold">{credits}</span> credit{credits !== 1 ? "s" : ""} left
-          </span>
-          <span className="ml-auto text-[11px] text-violet-500 font-semibold">
-            {VIDEO_COST} credits / video
-          </span>
-        </div>
-      ) : (
-        <div className="mx-4 mb-3 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5">
-          <div className="text-xs text-amber-700 font-semibold">
-            Need {VIDEO_COST} credits ({credits} left) — upgrade to continue
+      {/* ── Upload phase (fallback — should normally skip via modal) ── */}
+      {phase === "upload" && (
+        <div className="flex-1 flex flex-col items-center justify-center px-6 gap-6">
+          {/* Template preview */}
+          <div className="w-full max-w-sm aspect-video rounded-2xl overflow-hidden bg-black shadow-xl">
+            {item.sample_video_url ? (
+              <video src={item.sample_video_url} poster={item.cover_image_url} autoPlay muted loop playsInline className="w-full h-full object-cover" />
+            ) : (
+              <img src={item.cover_image_url} alt={item.title} className="w-full h-full object-cover" />
+            )}
           </div>
+
+          <div className="text-center">
+            <h2 className="text-xl font-extrabold mb-1">{item.title}</h2>
+            <p className="text-sm text-muted-foreground">Upload a clear photo of yourself to get started</p>
+          </div>
+
           <button
-            onClick={() => setShowPaywall(true)}
-            className="text-xs font-bold text-white bg-amber-500 hover:bg-amber-400 px-3 py-1.5 rounded-lg transition-colors"
+            onClick={() => pickerRef.current?.click()}
+            className="flex items-center gap-3 bg-brand text-white font-bold text-base px-8 py-4 rounded-2xl shadow-lg shadow-brand/30 hover:bg-brand/90 transition-colors"
           >
-            Upgrade
+            <Upload className="size-5" />
+            Upload your photo
           </button>
         </div>
       )}
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 pb-4 space-y-3">
-        {messages.map((m) => (
-          <MessageBubble key={m.id} msg={m} filenameBase={slugTitle} />
-        ))}
+      {/* ── Generating phases ── */}
+      {(phase === "photo" || phase === "video") && (
+        <div className="flex-1 flex flex-col items-center justify-center px-6 gap-8">
+          {/* Side-by-side: template + user photo */}
+          <div className="flex items-center gap-4 w-full max-w-sm">
+            <div className="flex-1 aspect-square rounded-2xl overflow-hidden bg-black">
+              <img src={item.cover_image_url} alt="Template" className="w-full h-full object-cover opacity-70" />
+              <p className="sr-only">Template</p>
+            </div>
+            <div className="text-muted-foreground font-bold text-2xl">+</div>
+            <div className="flex-1 aspect-square rounded-2xl overflow-hidden bg-secondary border-2 border-brand">
+              {userPhoto ? (
+                <img src={userPhoto} alt="Your photo" className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full grid place-items-center">
+                  <Upload className="size-6 text-muted-foreground" />
+                </div>
+              )}
+            </div>
+          </div>
 
-        {!hasUploaded && !busy && (
-          <div className="flex justify-center pt-4">
+          {/* Step progress */}
+          <div className="w-full max-w-sm space-y-3">
+            <StepRow
+              number={1}
+              label="Styling your photo with the template"
+              active={phase === "photo"}
+              done={phase !== "photo"}
+            />
+            <StepRow
+              number={2}
+              label="Animating your photo into a video"
+              active={phase === "video"}
+              done={false}
+            />
+          </div>
+
+          <p className="text-xs text-muted-foreground text-center max-w-xs">
+            This takes about 2 minutes. Keep this page open.
+          </p>
+        </div>
+      )}
+
+      {/* ── Done phase ── */}
+      {phase === "done" && resultUrl && (
+        <div className="flex-1 flex flex-col items-center justify-center px-4 gap-5 py-6">
+          <div className="flex items-center gap-2 text-green-500">
+            <CheckCircle2 className="size-5" />
+            <span className="font-bold text-sm">Your video is ready!</span>
+          </div>
+
+          {/* Video player */}
+          <div className="relative w-full max-w-xs aspect-[9/16] rounded-2xl overflow-hidden bg-black shadow-2xl">
+            <video
+              src={resultUrl}
+              controls
+              autoPlay
+              loop
+              playsInline
+              className="w-full h-full object-cover"
+            />
+          </div>
+
+          {/* Actions */}
+          <div className="flex flex-col gap-3 w-full max-w-xs">
+            <a
+              href={resultUrl}
+              download={`${slugTitle}-${uid()}.mp4`}
+              className="flex items-center justify-center gap-2.5 w-full py-3.5 rounded-2xl bg-brand text-white font-bold text-sm shadow-lg shadow-brand/30"
+            >
+              <Download className="size-4" />
+              Save video
+            </a>
             <button
-              type="button"
-              onClick={() => pickerRef.current?.click()}
-              className="inline-flex items-center gap-2 bg-black text-white text-sm font-semibold rounded-full px-5 py-3 shadow-lg"
+              onClick={() => navigate({ to: "/" })}
+              className="flex items-center justify-center gap-2 w-full py-3 rounded-2xl border border-border text-sm font-semibold text-foreground hover:bg-secondary transition-colors"
             >
               <VideoIcon className="size-4" />
-              Create yours — upload photo
+              Try another template
             </button>
           </div>
-        )}
-      </div>
-
-      {/* Composer */}
-      <div className="px-3 pt-2 pb-4 bg-transparent">
-        <input
-          ref={pickerRef}
-          type="file"
-          accept="image/*"
-          multiple
-          onChange={onPick}
-          className="hidden"
-        />
-        <div className="flex items-center gap-2 bg-white rounded-full pl-3 pr-1.5 py-1.5 shadow-sm border border-black/5">
-          <button
-            type="button"
-            onClick={() => pickerRef.current?.click()}
-            disabled={busy}
-            className="size-9 grid place-items-center rounded-full text-foreground/70 active:bg-black/5 disabled:opacity-40"
-            aria-label="Attach photos"
-          >
-            <Plus className="size-5" />
-          </button>
-          <input
-            readOnly
-            placeholder={hasUploaded ? "Generating video…" : "Tap + to upload your photo"}
-            className="flex-1 bg-transparent outline-none text-[15px] placeholder:text-muted-foreground/70"
-          />
-          <button
-            type="button"
-            className="size-9 grid place-items-center rounded-full text-foreground/70 active:bg-black/5"
-            aria-label="Voice"
-            disabled
-          >
-            <Mic className="size-5" />
-          </button>
-          <button
-            type="button"
-            disabled
-            className="size-10 grid place-items-center rounded-full bg-black text-white disabled:opacity-50"
-            aria-label={busy ? "Generating" : "Send"}
-          >
-            {busy ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
-          </button>
         </div>
-      </div>
+      )}
+
+      {/* ── Error phase ── */}
+      {phase === "error" && (
+        <div className="flex-1 flex flex-col items-center justify-center px-6 gap-6 text-center">
+          <div className="size-16 rounded-full bg-red-100 dark:bg-red-900/20 grid place-items-center">
+            <AlertCircle className="size-8 text-red-500" />
+          </div>
+          <div>
+            <p className="font-bold text-base mb-2">Generation failed</p>
+            <p className="text-sm text-muted-foreground max-w-xs leading-relaxed">{errorMsg}</p>
+          </div>
+          <div className="flex flex-col gap-3 w-full max-w-xs">
+            <button
+              onClick={retry}
+              className="flex items-center justify-center gap-2 w-full py-3.5 rounded-2xl bg-brand text-white font-bold text-sm"
+            >
+              <RefreshCw className="size-4" />
+              Try again
+            </button>
+            <button
+              onClick={() => navigate({ to: "/" })}
+              className="flex items-center justify-center gap-2 w-full py-3 rounded-2xl border border-border text-sm font-semibold text-foreground"
+            >
+              Pick a different template
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Bottom credit indicator — only visible during generation */}
+      {(phase === "photo" || phase === "video") && (
+        <div className="px-6 pb-6 pt-2 flex items-center justify-center gap-2 text-xs text-muted-foreground">
+          <Sparkles className="size-3.5 text-brand animate-pulse" />
+          <span>Using <strong>{VIDEO_COST} credits</strong> · {credits} remaining</span>
+        </div>
+      )}
     </div>
   );
 }
 
-function MessageBubble({
-  msg,
-  filenameBase,
-}: {
-  msg: ChatMessage;
-  filenameBase: string;
+// ── Step row component ────────────────────────────────────────────────────────
+
+function StepRow({ number, label, active, done }: {
+  number: number;
+  label: string;
+  active: boolean;
+  done: boolean;
 }) {
-  if (msg.role === "user" && msg.kind === "images") {
-    return (
-      <div className="flex justify-end">
-        <div className="relative">
-          <div
-            className="grid gap-1 rounded-2xl overflow-hidden bg-black"
-            style={{
-              gridTemplateColumns: `repeat(${Math.min(msg.images.length, 2)}, minmax(0, 1fr))`,
-              width: msg.images.length > 1 ? 200 : 120,
-            }}
-          >
-            {msg.images.map((src, i) => (
-              <img key={i} src={src} alt="" className="aspect-square object-cover" />
-            ))}
-          </div>
-          {msg.images.length > 1 && (
-            <span className="absolute top-1.5 left-1.5 text-[11px] font-semibold text-white bg-black/60 rounded px-1.5">
-              {msg.images.length}
-            </span>
-          )}
-        </div>
+  return (
+    <div className={`flex items-center gap-3 p-3.5 rounded-xl border transition-all ${
+      active
+        ? "border-brand/40 bg-brand/5"
+        : done
+          ? "border-green-500/30 bg-green-500/5"
+          : "border-border bg-secondary/30 opacity-50"
+    }`}>
+      <div className={`size-7 rounded-full shrink-0 flex items-center justify-center text-xs font-bold ${
+        active
+          ? "bg-brand text-white"
+          : done
+            ? "bg-green-500 text-white"
+            : "bg-secondary text-muted-foreground"
+      }`}>
+        {done ? <CheckCircle2 className="size-4" /> : active ? <Loader2 className="size-3.5 animate-spin" /> : number}
       </div>
-    );
-  }
-
-  if (msg.role === "user" && msg.kind === "text") {
-    return (
-      <div className="flex justify-end">
-        <div className="max-w-[80%] bg-white rounded-2xl px-3.5 py-2.5 text-[15px] shadow-sm border border-black/5">
-          {msg.text}
-        </div>
-      </div>
-    );
-  }
-
-  if (msg.role === "assistant" && msg.kind === "ref") {
-    return (
-      <div className="flex justify-end">
-        <div className="max-w-[80%] bg-white rounded-2xl p-2.5 shadow-sm border border-black/5 flex items-center gap-2.5">
-          <span className="text-foreground/40 text-lg leading-none">↳</span>
-          <img src={msg.templateUrl} alt="" className="size-9 rounded-md object-cover" />
-          <span className="text-[15px] text-foreground pr-1">{msg.label}</span>
-        </div>
-      </div>
-    );
-  }
-
-  if (msg.role === "assistant" && msg.kind === "status") {
-    return (
-      <div className="flex">
-        <div className="rounded-2xl bg-white border border-black/5 px-3.5 py-3 shadow-sm flex items-center gap-2.5 text-[15px]">
-          <Sparkles className="size-4 text-sky-500 animate-pulse" />
-          <span className="font-semibold text-sky-500">{msg.text}</span>
-        </div>
-      </div>
-    );
-  }
-
-  if (msg.role === "assistant" && msg.kind === "image") {
-    return (
-      <div className="flex">
-        <div className="rounded-2xl overflow-hidden bg-black w-[220px]">
-          <img src={msg.imageDataUrl} alt="Generated" className="w-full aspect-[3/4] object-cover" />
-          {msg.caption && (
-            <p className="px-3 py-2 text-[12px] text-white/80 bg-black">{msg.caption}</p>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  if (msg.role === "assistant" && msg.kind === "video") {
-    return (
-      <div className="flex">
-        <div className="relative rounded-2xl overflow-hidden bg-black w-[260px]">
-          <video
-            src={msg.videoUrl}
-            controls
-            autoPlay
-            loop
-            playsInline
-            className="w-full aspect-[9/16] object-cover"
-          />
-          <a
-            href={msg.videoUrl}
-            download={`${filenameBase}.mp4`}
-            className="absolute bottom-2 right-2 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-white/90 text-foreground text-[11px] font-semibold shadow"
-          >
-            <Download className="size-3.5" />
-            Save
-          </a>
-        </div>
-      </div>
-    );
-  }
-
-  if (msg.role === "assistant" && msg.kind === "error") {
-    return (
-      <div className="flex">
-        <div className="max-w-[85%] rounded-2xl bg-red-50 border border-red-200 text-red-700 px-3.5 py-2.5 text-[14px] flex items-start gap-2">
-          <X className="size-4 mt-0.5 shrink-0" />
-          <span>{msg.text}</span>
-        </div>
-      </div>
-    );
-  }
-
-  return null;
+      <span className={`text-sm font-medium ${active ? "text-foreground" : done ? "text-muted-foreground" : "text-muted-foreground"}`}>
+        {label}
+      </span>
+    </div>
+  );
 }
