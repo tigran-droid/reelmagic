@@ -408,21 +408,23 @@ async function buildGeminiParts(body: Record<string, unknown>) {
     ];
 
     const BASE_TEMPLATE_INSTRUCTION = [
-      "Create one photorealistic image by artistically combining the two attached reference photos.",
-      `Image ${templateImageNumber} defines the scene: composition, camera angle, framing, lighting, background, and body pose.`,
-      `Image ${identityImageNumber} defines the person: their face, hair, skin tone, and appearance. The main subject in the final image should look like the person in Image ${identityImageNumber}.`,
-      `By default keep the clothing and style shown in Image ${templateImageNumber}. The template notes below may ask you to use the clothing or style from Image ${identityImageNumber} instead — follow those notes if present.`,
-      `If Image ${templateImageNumber} shows a face in a secondary location (screen, reflection, or small inset), make that secondary face also resemble Image ${identityImageNumber}.`,
-      "Produce a clean, single-shot, photorealistic result. No collage, no split screen, no text overlays, no stickers.",
+      "Create one photorealistic photograph using the two attached reference images.",
+      `Image ${templateImageNumber} is the SCENE reference. Copy its composition, camera angle, framing, lighting, background, body pose, and — by default — the outfit and clothing.`,
+      `Image ${identityImageNumber} is the PERSON reference. The face, hair, skin tone, and identity of the main subject in the final photograph MUST be the person from Image ${identityImageNumber}.`,
+      `This is the most important rule: do NOT keep the face, hair, or facial features of whoever appears in Image ${templateImageNumber}. The main subject's face must be clearly and recognizably the person from Image ${identityImageNumber}.`,
+      `Match Image ${identityImageNumber}'s exact face shape, eyes, nose, mouth, eyebrows, skin tone, and hairstyle so the final subject is unmistakably the same person as in Image ${identityImageNumber}.`,
+      `If Image ${templateImageNumber} shows a face in any secondary location (a phone screen, mirror reflection, poster, or small inset), make that face the person from Image ${identityImageNumber} as well.`,
+      `Clothing rule: keep the outfit from Image ${templateImageNumber} by default. If the template notes below ask to copy the clothing, shoes, or accessories from Image ${identityImageNumber}, do that instead.`,
+      "Produce a clean, single-shot, photorealistic photograph. No collage, no split screen, no text overlays, no stickers, no extra people.",
       "Return exactly one complete photorealistic image.",
     ].join("\n");
 
     const extraPrompt =
       typeof prompt === "string" && prompt.trim().length > 0
         ? [
-            "Additional creative direction for this template:",
+            "Template notes (follow these — they have priority over the defaults above except the identity rule):",
             prompt.trim(),
-            `The person's appearance comes from Image ${identityImageNumber}. These notes may specify clothing, accessories, or style details — apply them.`,
+            `The face and identity always come from Image ${identityImageNumber}. These notes may specify clothing, shoes, accessories, hairstyle, or style details — apply them exactly.`,
           ].join("\n")
         : "";
 
