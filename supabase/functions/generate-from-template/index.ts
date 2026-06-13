@@ -18,7 +18,7 @@ const EDIT_IMAGE_MAX_DIM = 576;
 const FUNCTION_BUDGET_MS = 360_000;
 const GEMINI_ATTEMPT_TIMEOUT_MS = 300_000;
 const MAX_USER_REFS = 1;
-const REQUEST_HASH_VERSION = "generate-from-template:preserve-follow-up-subject:v9";
+const REQUEST_HASH_VERSION = "generate-from-template:full-outfit-reference:v10";
 const COMPLETED_JOB_CACHE_MS = 2 * 60 * 60 * 1000;
 const ACTIVE_JOB_REUSE_MS = 6 * 60 * 1000;
 
@@ -387,34 +387,34 @@ async function buildGeminiParts(body: Record<string, unknown>) {
     }
 
     const trimmedUserImages = userImages.slice(0, MAX_USER_REFS);
-    const [templateDataUrl, ...normalizedUserImages] = await Promise.all([
+    const [templateDataUrl, fullUserImage] = await Promise.all([
       urlToDataUrl(String(templateUrl)).then((u) => normalizeDataUrl(u, TEMPLATE_MAX_DIM)),
-      ...trimmedUserImages.map((img: string) =>
-        normalizeDataUrl(img, USER_REF_MAX_DIM),
-      ),
+      normalizeDataUrl(String(trimmedUserImages[0]), USER_REF_MAX_DIM),
     ]);
-    const identityCrops = await Promise.all(
-      normalizedUserImages.map((img) => createIdentityCropDataUrl(img)),
-    );
-    allImages = [templateDataUrl, ...identityCrops];
+    // Send THREE references:
+    //  1. the scene template
+    //  2. the FULL user photo (face + hair + clothing + shoes + accessories) so the
+    //     model can copy the whole look when the template prompt asks for it
+    //  3. a tight face crop so the facial identity stays locked and accurate
+    const faceCrop = await createIdentityCropDataUrl(fullUserImage);
     const templateImageNumber = 1;
-    const identityImageNumber = allImages.length;
+    const appearanceImageNumber = 2;
+    const faceImageNumber = 3;
+    allImages = [templateDataUrl, fullUserImage, faceCrop];
     imageLabels = [
-      `IMAGE ${templateImageNumber} - SCENE TEMPLATE ONLY. Use this for pose, body placement, outfit/clothing, background, lighting, camera angle, framing, and style. Do not use this person's face, hair, age, or identity.`,
-      ...identityCrops.map(
-        (_, index) =>
-          `IMAGE ${templateImageNumber + index + 1} - FINAL IDENTITY LOCK. This is the only identity reference. The final main foreground subject must visibly match this face, hair, skin tone, age, and recognizable identity.`,
-      ),
+      `IMAGE ${templateImageNumber} - SCENE TEMPLATE. Use this for composition, camera angle, framing, lighting, background, and the main subject's body pose. By default also use its outfit, unless the template notes say otherwise. Do NOT use this person's face, hair, or identity.`,
+      `IMAGE ${appearanceImageNumber} - FULL PERSON REFERENCE. This is the real subject: their face, hair, skin tone, body, clothing, shoes, and accessories. Use it as the identity source, and when the template notes ask to change or copy the outfit, dress the subject in the exact clothing, shoes, and accessories shown here.`,
+      `IMAGE ${faceImageNumber} - FACE CLOSE-UP of the same person. Use it to lock the facial identity precisely (face shape, eyes, nose, mouth, eyebrows, skin tone).`,
     ];
 
     const BASE_TEMPLATE_INSTRUCTION = [
-      "Create one photorealistic photograph using the two attached reference images.",
-      `Image ${templateImageNumber} is the SCENE reference. Copy its composition, camera angle, framing, lighting, background, body pose, and — by default — the outfit and clothing.`,
-      `Image ${identityImageNumber} is the PERSON reference. The face, hair, skin tone, and identity of the main subject in the final photograph MUST be the person from Image ${identityImageNumber}.`,
-      `This is the most important rule: do NOT keep the face, hair, or facial features of whoever appears in Image ${templateImageNumber}. The main subject's face must be clearly and recognizably the person from Image ${identityImageNumber}.`,
-      `Match Image ${identityImageNumber}'s exact face shape, eyes, nose, mouth, eyebrows, skin tone, and hairstyle so the final subject is unmistakably the same person as in Image ${identityImageNumber}.`,
-      `If Image ${templateImageNumber} shows a face in any secondary location (a phone screen, mirror reflection, poster, or small inset), make that face the person from Image ${identityImageNumber} as well.`,
-      `Clothing rule: keep the outfit from Image ${templateImageNumber} by default. If the template notes below ask to copy the clothing, shoes, or accessories from Image ${identityImageNumber}, do that instead.`,
+      "Create one photorealistic photograph using the three attached reference images.",
+      `Image ${templateImageNumber} is the SCENE reference: copy its composition, camera angle, framing, lighting, background, and the main subject's body pose.`,
+      `Image ${appearanceImageNumber} is the FULL PERSON reference: the real face, hair, skin tone, body, clothing, shoes, and accessories of the subject.`,
+      `Image ${faceImageNumber} is a FACE CLOSE-UP of the same person, used to lock the facial identity precisely.`,
+      `IDENTITY (most important): the main subject's face and hair MUST clearly and recognizably be the person from Image ${appearanceImageNumber} and Image ${faceImageNumber}. Do NOT keep the face, hair, or features of whoever appears in Image ${templateImageNumber}.`,
+      `OUTFIT: follow the template notes below. If the notes ask to change, replace, or copy the outfit, take the exact clothing, shoes, and accessories from Image ${appearanceImageNumber} and put them on the subject (adapted naturally to the scene's pose and lighting). If the notes do not mention clothing, keep the outfit from Image ${templateImageNumber}.`,
+      `If Image ${templateImageNumber} shows a face in a secondary location (a phone screen, mirror reflection, poster, or small inset), update that face to the person from Image ${appearanceImageNumber} as well.`,
       "Produce a clean, single-shot, photorealistic photograph. No collage, no split screen, no text overlays, no stickers, no extra people.",
       "Return exactly one complete photorealistic image.",
     ].join("\n");
@@ -422,9 +422,9 @@ async function buildGeminiParts(body: Record<string, unknown>) {
     const extraPrompt =
       typeof prompt === "string" && prompt.trim().length > 0
         ? [
-            "Template notes (follow these — they have priority over the defaults above except the identity rule):",
+            "TEMPLATE NOTES (highest priority — follow exactly, except they can never change the facial identity):",
             prompt.trim(),
-            `The face and identity always come from Image ${identityImageNumber}. These notes may specify clothing, shoes, accessories, hairstyle, or style details — apply them exactly.`,
+            `The face and identity always come from Image ${appearanceImageNumber}/${faceImageNumber}. When these notes mention outfit, clothing, dress, shoes, accessories, or hairstyle, take those from Image ${appearanceImageNumber} and apply them exactly.`,
           ].join("\n")
         : "";
 
