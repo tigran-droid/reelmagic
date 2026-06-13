@@ -57,41 +57,46 @@ function Trends() {
       <div className="min-h-screen bg-[#f5f5f7]">
 
         {/* ── Header ── */}
-        <div className="sticky top-0 z-20 bg-[#f5f5f7]/95 backdrop-blur-sm">
+        <div className="sticky top-0 z-20 bg-[#f5f5f7]/98 backdrop-blur-md border-b border-black/5">
           {/* Tab row */}
-          <div className="flex items-center gap-1 px-3 pt-12 md:pt-5 pb-1 overflow-x-auto no-scrollbar">
+          <div className="flex items-center px-4 pt-12 md:pt-5 border-b border-black/5">
+            {/* X close button */}
             <button
               onClick={() => navigate({ to: "/photoshop" })}
-              className="size-9 grid place-items-center shrink-0 mr-1"
+              className="size-8 grid place-items-center shrink-0 mr-3 rounded-full bg-black/6 text-black active:bg-black/10 transition-colors"
             >
-              <X className="size-5 text-black" strokeWidth={2.5} />
+              <X className="size-4" strokeWidth={2.5} />
             </button>
-            {TABS.map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`shrink-0 px-3 py-2 text-[15px] font-semibold relative transition-colors ${
-                  activeTab === tab ? "text-black" : "text-gray-400"
-                }`}
-              >
-                {tab}
-                {activeTab === tab && (
-                  <span className="absolute bottom-0 left-3 right-3 h-[2px] rounded-full bg-black" />
-                )}
-              </button>
-            ))}
+
+            {/* Tabs */}
+            <div className="flex items-end flex-1 overflow-x-auto no-scrollbar gap-0">
+              {TABS.map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`shrink-0 px-3.5 pb-2.5 pt-1 text-[14px] font-semibold relative transition-colors ${
+                    activeTab === tab ? "text-black" : "text-gray-400 hover:text-gray-600"
+                  }`}
+                >
+                  {tab}
+                  {activeTab === tab && (
+                    <span className="absolute bottom-0 left-2 right-2 h-[2.5px] rounded-full bg-black" />
+                  )}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Pills row */}
-          <div className="flex gap-2 px-3 py-2.5 overflow-x-auto no-scrollbar">
+          <div className="flex gap-1.5 px-3 py-2.5 overflow-x-auto no-scrollbar">
             {PILLS.map((pill) => (
               <button
                 key={pill}
                 onClick={() => setActivePill(pill)}
-                className={`shrink-0 px-4 py-1.5 rounded-full text-[13px] font-semibold border transition-all ${
+                className={`shrink-0 px-3.5 py-1 rounded-full text-[12.5px] font-semibold transition-all ${
                   activePill === pill
-                    ? "bg-black text-white border-black"
-                    : "bg-white text-black border-gray-200"
+                    ? "bg-black text-white shadow-sm"
+                    : "bg-white text-gray-700 border border-gray-200 shadow-sm"
                 }`}
               >
                 {pill}
@@ -101,17 +106,17 @@ function Trends() {
         </div>
 
         {/* ── Grid ── */}
-        <div className="px-2.5 pt-1 pb-36">
+        <div className="px-1.5 pt-1.5 pb-36">
           {isPending ? (
-            <div className="grid grid-cols-2 gap-2.5">
-              <div className="flex flex-col gap-2.5">
+            <div className="grid grid-cols-2 gap-1.5">
+              <div className="flex flex-col gap-1.5">
                 {skeletons.slice(0, 3).map((_, i) => (
-                  <div key={i} className="w-full rounded-2xl bg-gray-200 aspect-[3/4] animate-pulse" />
+                  <div key={i} className="w-full rounded-2xl bg-gray-200 aspect-[9/16] animate-pulse" />
                 ))}
               </div>
-              <div className="flex flex-col gap-2.5 pt-10">
+              <div className="flex flex-col gap-1.5 pt-10">
                 {skeletons.slice(3).map((_, i) => (
-                  <div key={i} className="w-full rounded-2xl bg-gray-200 aspect-[3/4] animate-pulse" />
+                  <div key={i} className="w-full rounded-2xl bg-gray-200 aspect-[9/16] animate-pulse" />
                 ))}
               </div>
             </div>
@@ -122,15 +127,15 @@ function Trends() {
               <p className="text-xs text-gray-400">Add some from the admin panel</p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-2.5">
+            <div className="grid grid-cols-2 gap-1.5">
               {/* col 1 — normal */}
-              <div className="flex flex-col gap-2.5">
+              <div className="flex flex-col gap-1.5">
                 {col1.map((t, i) => (
                   <TrendCard key={`a-${i}`} tile={t} onClick={open} />
                 ))}
               </div>
               {/* col 2 — staggered down */}
-              <div className="flex flex-col gap-2.5 pt-10">
+              <div className="flex flex-col gap-1.5 pt-10">
                 {col2.map((t, i) => (
                   <TrendCard key={`b-${i}`} tile={t} onClick={open} />
                 ))}
@@ -164,7 +169,7 @@ function TrendCard({ tile, onClick }: { tile: Tile; onClick: () => void }) {
   return (
     <button onClick={onClick} className="w-full text-left active:scale-[0.97] transition-transform">
       {/* Image */}
-      <div className="relative w-full rounded-2xl overflow-hidden bg-gray-200 aspect-[3/4] shadow-sm">
+      <div className="relative w-full rounded-2xl overflow-hidden bg-gray-200 aspect-[9/16] shadow-sm">
         {tile.cover ? (
           <img
             src={tile.cover}
