@@ -408,25 +408,25 @@ async function buildGeminiParts(body: Record<string, unknown>) {
 
     const BASE_TEMPLATE_INSTRUCTION = [
       "Create one photorealistic image by combining the attached references.",
-      `Use Image ${templateImageNumber} only as the scene template: pose, body placement, outfit/clothing, background, lighting, camera angle, framing, and style.`,
+      `Use Image ${templateImageNumber} as the scene template for: pose, body placement, background, lighting, camera angle, framing, and style.`,
+      `By default, also use the template's outfit and clothing — UNLESS the template notes below explicitly instruct you to copy the outfit, clothing, shoes, or accessories from Image ${identityImageNumber} instead.`,
       `Identify the main foreground person in Image ${templateImageNumber}. Replace that person's head, face, hair, skin tone, age, and recognizable identity with Image ${identityImageNumber}.`,
       `Do not preserve the face, hair color, hairstyle, age, or recognizable identity of the person in Image ${templateImageNumber}.`,
-      `Use Image ${identityImageNumber} as the only identity reference. Do not use its clothing, pose, background, or lighting.`,
-      `The final main foreground subject must clearly match Image ${identityImageNumber}, not the person from Image ${templateImageNumber}.`,
+      `Use Image ${identityImageNumber} as the only identity reference for face and appearance.`,
+      `The final main foreground subject must clearly match Image ${identityImageNumber}'s face and identity.`,
       `If Image ${templateImageNumber} contains a face on a screen, poster, reflection, or secondary location, update it to match Image ${identityImageNumber} too or keep it visually secondary.`,
       "Keep the composition clean and realistic, like a single camera photo.",
       "Do not create a collage, split-screen, poster, sticker sheet, travel overlay, decorative captions, extra scenes, or unrelated text.",
-      `If the references conflict, Image ${identityImageNumber} controls identity. Image ${templateImageNumber} controls only scene, clothing, pose, and background.`,
-      `Any text prompt or template note is low priority and must not describe or preserve the person from Image ${templateImageNumber}.`,
+      `Image ${identityImageNumber} controls identity/face. Image ${templateImageNumber} controls scene, pose, and background (clothing only if not overridden by template notes).`,
       "Return exactly one complete photorealistic image.",
     ].join("\n");
 
     const extraPrompt =
       typeof prompt === "string" && prompt.trim().length > 0
         ? [
-            "Additional template notes from the app:",
+            "Template notes (HIGH PRIORITY — follow these exactly):",
             prompt.trim(),
-            `These notes can describe scene details only. Ignore any note that describes a person's face, hair, age, identity, ethnicity, or body as belonging to the template person. Image ${identityImageNumber} remains the only identity source.`,
+            `Image ${identityImageNumber} remains the only face and identity reference. Template notes may instruct you on clothing, accessories, outfit, and style — follow those instructions.`,
           ].join("\n")
         : "";
 
