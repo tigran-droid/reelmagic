@@ -9,7 +9,7 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const IMAGE_GENERATION_MODEL = "gemini-3.1-flash-image";
+const IMAGE_GENERATION_MODEL = "gemini-2.0-flash-exp";
 const MAX_IMAGE_BYTES = 360_000;
 const TEMPLATE_MAX_DIM = 640;
 const USER_REF_MAX_DIM = 704;
