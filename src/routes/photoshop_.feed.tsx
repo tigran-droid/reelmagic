@@ -35,6 +35,22 @@ type FeedItemRow = {
 const FEED_SELECT =
   "id,image_url,image_urls,title,hashtags,song,audio_url,audio_start_sec,audio_end_sec,prompt,created_at";
 const FEED_PAGE_SIZE = 120;
+
+function mapRow(r: FeedItemRow): Item {
+  const imgs = r.image_urls && r.image_urls.length > 0 ? r.image_urls : [r.image_url];
+  return {
+    id: r.id,
+    images: imgs,
+    cover: imgs[0],
+    title: r.title,
+    hashtags: r.hashtags ?? [],
+    song: r.song ?? "Original audio",
+    audio: r.audio_url,
+    audioStart: Number(r.audio_start_sec ?? 0),
+    audioEnd: r.audio_end_sec != null ? Number(r.audio_end_sec) : null,
+    prompt: r.prompt ?? null,
+  };
+}
 const CACHE_TIME_MS = 5 * 60_000;
 const UPLOAD_IMAGE_MAX_EDGE = 1024;
 const UPLOAD_IMAGE_QUALITY = 0.78;
@@ -86,6 +102,7 @@ async function optimizeImageForUpload(file: File): Promise<string> {
 export const Route = createFileRoute("/photoshop_/feed")({
   validateSearch: (s: Record<string, unknown>) => ({
     item: typeof s.item === "string" ? s.item : undefined,
+    from: s.from === "local" ? ("local" as const) : undefined,
   }),
   head: () => ({
     meta: [
@@ -98,7 +115,8 @@ export const Route = createFileRoute("/photoshop_/feed")({
 
 function PhotoshopFeed() {
   const navigate = useNavigate();
-  const { item: targetId } = useSearch({ from: "/photoshop_/feed" });
+  const { item: targetId, from } = useSearch({ from: "/photoshop_/feed" });
+  const isLocal = from === "local";
   const [activeIndex, setActiveIndex] = useState(0);
   const [needsTapIndex, setNeedsTapIndex] = useState<number | null>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
@@ -109,16 +127,36 @@ function PhotoshopFeed() {
   const continuedRef = useRef(false);
 
   const q = useQuery({
-    queryKey: ["photoshop-feed", targetId ?? null],
+    queryKey: ["photoshop-feed", isLocal ? "local" : "photoshop", targetId ?? null],
     queryFn: async () => {
-      const feedQuery = supabase
+      const photoshopQuery = supabase
         .from("photoshop_items")
         .select(FEED_SELECT)
         .order("created_at", { ascending: false })
         .range(0, FEED_PAGE_SIZE - 1);
 
+      // LOCAL feed: scroll all reels first, then seamlessly continue into the
+      // photoshop_items pool — so the feed never dead-ends. The two sources stay
+      // separate tables; we just concatenate them into one continuous scroll.
+      if (isLocal) {
+        const reelsQuery = supabase
+          .from("reels")
+          .select(FEED_SELECT)
+          .order("created_at", { ascending: false })
+          .range(0, FEED_PAGE_SIZE - 1);
+
+        const [reelsRes, photoshopRes] = await Promise.all([reelsQuery, photoshopQuery]);
+        if (reelsRes.error) throw reelsRes.error;
+        if (photoshopRes.error) throw photoshopRes.error;
+
+        const reelRows = (reelsRes.data ?? []) as FeedItemRow[];
+        const photoshopRows = (photoshopRes.data ?? []) as FeedItemRow[];
+        return [...reelRows, ...photoshopRows].map(mapRow);
+      }
+
+      // PHOTOSHOP feed (clicked from the Photoshop page): photoshop_items only.
       const [feedRes, targetRes] = await Promise.all([
-        feedQuery,
+        photoshopQuery,
         targetId
           ? supabase.from("photoshop_items").select(FEED_SELECT).eq("id", targetId).maybeSingle()
           : Promise.resolve({ data: null, error: null }),
@@ -133,21 +171,7 @@ function PhotoshopFeed() {
         rows.unshift(targetRow);
       }
 
-      return rows.map<Item>((r) => {
-        const imgs = r.image_urls && r.image_urls.length > 0 ? r.image_urls : [r.image_url];
-        return {
-          id: r.id,
-          images: imgs,
-          cover: imgs[0],
-          title: r.title,
-          hashtags: r.hashtags ?? [],
-          song: r.song ?? "Original audio",
-          audio: r.audio_url,
-          audioStart: Number(r.audio_start_sec ?? 0),
-          audioEnd: r.audio_end_sec != null ? Number(r.audio_end_sec) : null,
-          prompt: r.prompt ?? null,
-        };
-      });
+      return rows.map(mapRow);
     },
     staleTime: CACHE_TIME_MS,
     gcTime: CACHE_TIME_MS * 2,

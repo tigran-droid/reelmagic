@@ -26,14 +26,13 @@ function Trends() {
   const [activePill, setActivePill] = useState("For You");
 
   const { data, isPending } = useQuery({
-    queryKey: ["trends-photoshop-items"],
+    queryKey: ["trends-reels"],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("photoshop_items")
-        .select("id,title,hashtags,image_url,image_urls,position,created_at")
-        .order("position")
+        .from("reels")
+        .select("id,title,hashtags,image_url,image_urls,created_at")
         .order("created_at", { ascending: false })
-        .limit(120);
+        .limit(60);
       if (error) throw error;
       return data.map<Tile>((r) => ({
         id: r.id,
@@ -52,7 +51,7 @@ function Trends() {
   const col2 = tiles.filter((_, i) => i % 2 === 1);
   const skeletons = Array.from({ length: 6 });
 
-  const open = (id: string) => navigate({ to: "/photoshop/feed", search: { item: id } });
+  const open = (id: string) => navigate({ to: "/photoshop/feed", search: { item: id, from: "local" } });
 
   return (
     <MobileFrame>
