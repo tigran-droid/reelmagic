@@ -126,22 +126,28 @@ export type Database = {
       }
       profiles: {
         Row: {
+          avatar_url: string | null
           created_at: string
           credits: number
+          display_name: string | null
           email: string | null
           id: string
           is_admin: boolean
         }
         Insert: {
+          avatar_url?: string | null
           created_at?: string
           credits?: number
+          display_name?: string | null
           email?: string | null
           id: string
           is_admin?: boolean
         }
         Update: {
+          avatar_url?: string | null
           created_at?: string
           credits?: number
+          display_name?: string | null
           email?: string | null
           id?: string
           is_admin?: boolean
@@ -187,6 +193,30 @@ export type Database = {
           prompt?: string | null
           song?: string | null
           title?: string
+        }
+        Relationships: []
+      }
+      user_images: {
+        Row: {
+          created_at: string
+          id: string
+          image_url: string
+          template_title: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          image_url: string
+          template_title?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          image_url?: string
+          template_title?: string | null
+          user_id?: string
         }
         Relationships: []
       }
