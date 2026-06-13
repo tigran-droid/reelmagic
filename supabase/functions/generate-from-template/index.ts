@@ -407,26 +407,21 @@ async function buildGeminiParts(body: Record<string, unknown>) {
     ];
 
     const BASE_TEMPLATE_INSTRUCTION = [
-      "Create one photorealistic image by combining the attached references.",
-      `Use Image ${templateImageNumber} as the scene template for: pose, body placement, background, lighting, camera angle, framing, and style.`,
-      `By default, also use the template's outfit and clothing — UNLESS the template notes below explicitly instruct you to copy the outfit, clothing, shoes, or accessories from Image ${identityImageNumber} instead.`,
-      `Identify the main foreground person in Image ${templateImageNumber}. Replace that person's head, face, hair, skin tone, age, and recognizable identity with Image ${identityImageNumber}.`,
-      `Do not preserve the face, hair color, hairstyle, age, or recognizable identity of the person in Image ${templateImageNumber}.`,
-      `Use Image ${identityImageNumber} as the only identity reference for face and appearance.`,
-      `The final main foreground subject must clearly match Image ${identityImageNumber}'s face and identity.`,
-      `If Image ${templateImageNumber} contains a face on a screen, poster, reflection, or secondary location, update it to match Image ${identityImageNumber} too or keep it visually secondary.`,
-      "Keep the composition clean and realistic, like a single camera photo.",
-      "Do not create a collage, split-screen, poster, sticker sheet, travel overlay, decorative captions, extra scenes, or unrelated text.",
-      `Image ${identityImageNumber} controls identity/face. Image ${templateImageNumber} controls scene, pose, and background (clothing only if not overridden by template notes).`,
+      "Create one photorealistic image by artistically combining the two attached reference photos.",
+      `Image ${templateImageNumber} defines the scene: composition, camera angle, framing, lighting, background, and body pose.`,
+      `Image ${identityImageNumber} defines the person: their face, hair, skin tone, and appearance. The main subject in the final image should look like the person in Image ${identityImageNumber}.`,
+      `By default keep the clothing and style shown in Image ${templateImageNumber}. The template notes below may ask you to use the clothing or style from Image ${identityImageNumber} instead — follow those notes if present.`,
+      `If Image ${templateImageNumber} shows a face in a secondary location (screen, reflection, or small inset), make that secondary face also resemble Image ${identityImageNumber}.`,
+      "Produce a clean, single-shot, photorealistic result. No collage, no split screen, no text overlays, no stickers.",
       "Return exactly one complete photorealistic image.",
     ].join("\n");
 
     const extraPrompt =
       typeof prompt === "string" && prompt.trim().length > 0
         ? [
-            "Template notes (HIGH PRIORITY — follow these exactly):",
+            "Additional creative direction for this template:",
             prompt.trim(),
-            `Image ${identityImageNumber} remains the only face and identity reference. Template notes may instruct you on clothing, accessories, outfit, and style — follow those instructions.`,
+            `The person's appearance comes from Image ${identityImageNumber}. These notes may specify clothing, accessories, or style details — apply them.`,
           ].join("\n")
         : "";
 
