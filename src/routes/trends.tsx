@@ -3,7 +3,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { MobileFrame } from "@/components/MobileFrame";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Wand2, Image as ImageIcon, Plus, Mic, X } from "lucide-react";
+import { Wand2, Image as ImageIcon, X } from "lucide-react";
 
 export const Route = createFileRoute("/trends")({
   head: () => ({
@@ -144,21 +144,6 @@ function Trends() {
           )}
         </div>
 
-        {/* ── Bottom input bar ── */}
-        <div className="fixed bottom-[72px] md:bottom-4 left-0 right-0 max-w-[480px] mx-auto px-3 z-20">
-          <div
-            onClick={open}
-            className="flex items-center gap-2 bg-white rounded-full px-4 py-2.5 shadow-md border border-gray-100 cursor-pointer"
-          >
-            <button className="size-7 grid place-items-center text-black shrink-0">
-              <Plus className="size-5" strokeWidth={2.5} />
-            </button>
-            <span className="flex-1 text-[15px] text-gray-400 select-none">Enter your ideas</span>
-            <button className="size-10 grid place-items-center rounded-full bg-black text-white shrink-0">
-              <Mic className="size-4" />
-            </button>
-          </div>
-        </div>
 
       </div>
     </MobileFrame>
