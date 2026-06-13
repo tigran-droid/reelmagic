@@ -7,7 +7,7 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { InstallModal } from "@/components/InstallPrompt";
+
 import { AuthProvider } from "@/lib/auth-context";
 
 import appCss from "../styles.css?url";
@@ -133,7 +133,6 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <Outlet />
-        <InstallModal />
       </AuthProvider>
     </QueryClientProvider>
   );
