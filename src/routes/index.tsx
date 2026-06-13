@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { MobileFrame } from "@/components/MobileFrame";
 import { AuthModal } from "@/components/AuthModal";
 import { PaywallModal } from "@/components/PaywallModal";
@@ -13,12 +13,9 @@ import { supabase } from "@/integrations/supabase/client";
 import glam from "@/assets/reel-glam.jpg";
 
 export const Route = createFileRoute("/")({
-  head: () => ({
-    meta: [
-      { title: "Videos — Magic Studio" },
-      { name: "description", content: "Browse AI reel templates: glam, cinematic, anime, retro and more." },
-    ],
-  }),
+  beforeLoad: ({ context: _ }) => {
+    throw redirect({ to: "/photoshop" });
+  },
   component: Categories,
 });
 

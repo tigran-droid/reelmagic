@@ -1,12 +1,11 @@
 import { Link, useLocation } from "@tanstack/react-router";
-import { Video, ImagePlus, MapPin, Sparkles, Wand2, LogIn, LogOut, User, CreditCard, Coins } from "lucide-react";
+import { ImagePlus, MapPin, Sparkles, Wand2, LogIn, LogOut, User, CreditCard, Coins } from "lucide-react";
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { AuthModal } from "@/components/AuthModal";
 
 const tabs = [
-  { to: "/", label: "Videos", icon: Video },
   { to: "/photoshop", label: "Photoshop", icon: ImagePlus },
   { to: "/trends", label: "Local", icon: MapPin },
   { to: "/pricing", label: "Pricing", icon: CreditCard },
@@ -80,11 +79,11 @@ export function MobileFrame({ children, immersive = false }: { children: ReactNo
           ) /* end loading ? null : user ? */}
 
           <Link
-            to="/feed"
+            to="/photoshop"
             className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-brand text-white text-sm font-bold shadow-lg shadow-brand/30 hover:bg-brand/90 transition-colors"
           >
             <Sparkles className="size-4" />
-            Create Reel
+            Create Photo
           </Link>
         </div>
       </aside>
