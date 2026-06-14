@@ -269,6 +269,7 @@ async function buildRequestHash(body: Record<string, unknown>, model: string) {
       templateUrl: typeof body.templateUrl === "string" ? body.templateUrl : "",
       prompt,
       userImageHashes,
+      keepTemplateOutfit: body.keepTemplateOutfit !== false,
     }),
   );
 }
@@ -336,7 +337,7 @@ async function insertImageJob(
 }
 
 async function buildGeminiParts(body: Record<string, unknown>) {
-  const { templateUrl, userImages, prompt, editImageDataUrl } = body;
+  const { templateUrl, userImages, prompt, editImageDataUrl, keepTemplateOutfit } = body;
   const isFollowUpEdit = isFollowUpEditBody(body);
   const isStructuralEdit = isStructuralFollowUpEdit(prompt);
   const outputInstruction =
@@ -413,7 +414,9 @@ async function buildGeminiParts(body: Record<string, unknown>) {
       `Image ${appearanceImageNumber} is the FULL PERSON reference: the real face, hair, skin tone, body, clothing, shoes, and accessories of the subject.`,
       `Image ${faceImageNumber} is a FACE CLOSE-UP of the same person, used to lock the facial identity precisely.`,
       `IDENTITY (most important): the main subject's face and hair MUST clearly and recognizably be the person from Image ${appearanceImageNumber} and Image ${faceImageNumber}. Do NOT keep the face, hair, or features of whoever appears in Image ${templateImageNumber}.`,
-      `OUTFIT: follow the template notes below. If the notes ask to change, replace, or copy the outfit, take the exact clothing, shoes, and accessories from Image ${appearanceImageNumber} and put them on the subject (adapted naturally to the scene's pose and lighting). If the notes do not mention clothing, keep the outfit from Image ${templateImageNumber}.`,
+      keepTemplateOutfit === false
+        ? `OUTFIT (MY OUTFIT MODE): The subject MUST wear the exact clothing, shoes, and accessories shown in Image ${appearanceImageNumber}. This overrides the scene template's outfit. Adapt the clothing naturally to the scene's pose and lighting, but the garments must clearly match Image ${appearanceImageNumber}.`
+        : `OUTFIT: follow the template notes below. If the notes ask to change, replace, or copy the outfit, take the exact clothing, shoes, and accessories from Image ${appearanceImageNumber} and put them on the subject (adapted naturally to the scene's pose and lighting). If the notes do not mention clothing, keep the outfit from Image ${templateImageNumber}.`,
       `If Image ${templateImageNumber} shows a face in a secondary location (a phone screen, mirror reflection, poster, or small inset), update that face to the person from Image ${appearanceImageNumber} as well.`,
       "Produce a clean, single-shot, photorealistic photograph. No collage, no split screen, no text overlays, no stickers, no extra people.",
       "Return exactly one complete photorealistic image.",
