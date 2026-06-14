@@ -8,6 +8,7 @@ import {
   Plus,
   Send,
   Sparkles,
+  Square,
   X,
   History,
   MessageSquarePlus,
@@ -148,11 +149,13 @@ function CreatePage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const [stagedImages, setStagedImages] = useState<string[]>([]);
   const [showAuth, setShowAuth] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const moreInputRef = useRef<HTMLInputElement>(null);
   const didAutoRun = useRef(false);
+  const generationTokenRef = useRef(0);
 
   const canAfford = credits >= PHOTO_COST;
 
@@ -202,6 +205,10 @@ function CreatePage() {
       return;
     }
 
+    // Each generation gets a unique token; stopGeneration() increments the
+    // counter, making any in-flight generation's token stale so its callbacks
+    // are silently ignored.
+    const token = ++generationTokenRef.current;
     setBusy(true);
     const statusId = uid();
     const trimmedPrompt = promptText?.trim();
@@ -280,6 +287,10 @@ function CreatePage() {
       if (!imageDataUrl) {
         throw new Error("Image generation is still processing. Please try again in a moment.");
       }
+
+      // If the user stopped this generation, discard the result silently.
+      if (generationTokenRef.current !== token) return;
+
       setMessages((m) =>
         m
           .filter((x) => x.id !== statusId)
@@ -313,6 +324,7 @@ function CreatePage() {
         })();
       }
     } catch (e) {
+      if (generationTokenRef.current !== token) return;
       const text = e instanceof Error ? e.message : "Failed";
       setMessages((m) =>
         m
@@ -320,7 +332,9 @@ function CreatePage() {
           .concat({ id: uid(), role: "assistant", kind: "error", text }),
       );
     } finally {
-      setBusy(false);
+      if (generationTokenRef.current === token) {
+        setBusy(false);
+      }
     }
   };
 
@@ -358,30 +372,59 @@ function CreatePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reel, userImages]);
 
-  const onSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const text = input.trim();
-    if (!text || busy || userImages.length === 0) return;
-    setInput("");
-    setMessages((m) => [
-      ...m,
-      { id: uid(), role: "user", kind: "text", text },
-    ]);
-    await runGeneration(userImages, text);
+  const stopGeneration = () => {
+    generationTokenRef.current++;
+    setBusy(false);
+    // Remove the in-progress status bubble
+    setMessages((m) => m.filter((x) => !(x.role === "assistant" && x.kind === "status")));
   };
 
+  const onSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    // Stop button: clicking Send while busy cancels the current generation
+    if (busy) {
+      stopGeneration();
+      return;
+    }
+
+    const text = input.trim();
+    const hasStaged = stagedImages.length > 0;
+    if (!hasStaged && !text) return;
+
+    setInput("");
+
+    if (hasStaged) {
+      // Commit the staged images as the new user reference
+      const imgs = stagedImages;
+      setStagedImages([]);
+      setUserImages(imgs);
+      sessionStorage.setItem(USER_IMAGES_KEY, JSON.stringify(imgs));
+      const newMsgs: ChatMessage[] = [
+        { id: uid(), role: "user", kind: "images", images: imgs },
+      ];
+      if (text) newMsgs.push({ id: uid(), role: "user", kind: "text", text });
+      setMessages((m) => [...m, ...newMsgs]);
+      await runGeneration(imgs, text || undefined);
+    } else {
+      // Text-only message — re-generate with the current user images
+      if (userImages.length === 0) return;
+      setMessages((m) => [
+        ...m,
+        { id: uid(), role: "user", kind: "text", text },
+      ]);
+      await runGeneration(userImages, text);
+    }
+  };
+
+  // "+" just stages the images — they aren't sent until the user presses Send
   const onPickMore = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (busy) return; // block while generating
     const files = Array.from(e.target.files ?? []).slice(0, 4);
     e.target.value = "";
     if (files.length === 0) return;
     const urls = await Promise.all(files.map(optimizeImageForUpload));
-    setUserImages(urls);
-    sessionStorage.setItem(USER_IMAGES_KEY, JSON.stringify(urls));
-    setMessages((m) => [
-      ...m,
-      { id: uid(), role: "user", kind: "images", images: urls },
-    ]);
-    await runGeneration(urls);
+    setStagedImages(urls);
   };
 
   const slugTitle = useMemo(
@@ -498,11 +541,32 @@ function CreatePage() {
           onChange={onPickMore}
           className="hidden"
         />
+
+        {/* Staged image previews */}
+        {stagedImages.length > 0 && (
+          <div className="flex gap-2 mb-2 px-1">
+            {stagedImages.map((src, i) => (
+              <div key={i} className="relative size-16 rounded-xl overflow-hidden bg-black shrink-0">
+                <img src={src} alt="" className="w-full h-full object-cover" />
+                <button
+                  type="button"
+                  onClick={() => setStagedImages((prev) => prev.filter((_, j) => j !== i))}
+                  className="absolute top-0.5 right-0.5 size-5 rounded-full bg-black/70 text-white flex items-center justify-center"
+                  aria-label="Remove photo"
+                >
+                  <X className="size-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
         <div className="flex items-center gap-2 bg-white rounded-full pl-3 pr-1.5 py-1.5 shadow-sm border border-black/5">
           <button
             type="button"
-            onClick={() => moreInputRef.current?.click()}
-            className="size-9 grid place-items-center rounded-full text-foreground/70 active:bg-black/5"
+            onClick={() => !busy && moreInputRef.current?.click()}
+            disabled={busy}
+            className="size-9 grid place-items-center rounded-full text-foreground/70 active:bg-black/5 disabled:opacity-40"
             aria-label="Attach photos"
           >
             <Plus className="size-5" />
@@ -510,7 +574,7 @@ function CreatePage() {
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Enter your ideas"
+            placeholder={busy ? "Generating…" : "Enter your ideas"}
             className="flex-1 bg-transparent outline-none text-[15px] placeholder:text-muted-foreground/70"
             disabled={busy}
           />
@@ -518,17 +582,22 @@ function CreatePage() {
             type="button"
             className="size-9 grid place-items-center rounded-full text-foreground/70 active:bg-black/5"
             aria-label="Voice"
+            disabled={busy}
           >
             <Mic className="size-5" />
           </button>
           <button
             type="submit"
-            disabled={busy || !input.trim()}
-            className="size-10 grid place-items-center rounded-full bg-black text-white disabled:opacity-50"
-            aria-label={busy ? "Generating" : "Send"}
+            disabled={!busy && !input.trim() && stagedImages.length === 0}
+            className={`size-10 grid place-items-center rounded-full text-white ${
+              busy
+                ? "bg-red-500 active:bg-red-600"
+                : "bg-black disabled:opacity-50"
+            }`}
+            aria-label={busy ? "Stop" : "Send"}
           >
             {busy ? (
-              <Loader2 className="size-4 animate-spin" />
+              <Square className="size-4 fill-white" />
             ) : (
               <Send className="size-4" />
             )}
