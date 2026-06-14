@@ -1,9 +1,8 @@
-import { useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { MobileFrame } from "@/components/MobileFrame";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Wand2, Image as ImageIcon, X } from "lucide-react";
+import { Wand2, Image as ImageIcon } from "lucide-react";
 
 export const Route = createFileRoute("/trends")({
   head: () => ({
@@ -17,13 +16,8 @@ export const Route = createFileRoute("/trends")({
 
 type Tile = { id: string; cover: string; title: string; hashtags: string[] };
 
-const TABS = ["All", "Photo", "AI trends", "Portrait"];
-const PILLS = ["For You", "Trending", "New", "Cinematic", "Retro", "Anime"];
-
 function Trends() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState("All");
-  const [activePill, setActivePill] = useState("For You");
 
   const { data, isPending } = useQuery({
     queryKey: ["trends-reels"],
@@ -57,50 +51,9 @@ function Trends() {
 
         {/* ── Header ── */}
         <div className="sticky top-0 z-20 bg-[#f5f5f7]/98 backdrop-blur-md border-b border-black/5">
-          {/* Tab row */}
-          <div className="flex items-center px-4 md:px-5 pt-12 md:pt-5 border-b border-black/5 max-w-[1280px] mx-auto w-full">
-            {/* X close button — mobile only (desktop has the sidebar) */}
-            <button
-              onClick={() => navigate({ to: "/photoshop" })}
-              className="md:hidden size-8 grid place-items-center shrink-0 mr-3 rounded-full bg-black/6 text-black active:bg-black/10 transition-colors"
-            >
-              <X className="size-4" strokeWidth={2.5} />
-            </button>
-
-            {/* Tabs */}
-            <div className="flex items-end flex-1 overflow-x-auto no-scrollbar gap-0">
-              {TABS.map((tab) => (
-                <button
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
-                  className={`shrink-0 px-3.5 pb-2.5 pt-1 text-[14px] font-semibold relative transition-colors ${
-                    activeTab === tab ? "text-black" : "text-gray-400 hover:text-gray-600"
-                  }`}
-                >
-                  {tab}
-                  {activeTab === tab && (
-                    <span className="absolute bottom-0 left-2 right-2 h-[2.5px] rounded-full bg-black" />
-                  )}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Pills row */}
-          <div className="flex gap-1.5 px-3 md:px-5 py-2.5 overflow-x-auto no-scrollbar max-w-[1280px] mx-auto w-full">
-            {PILLS.map((pill) => (
-              <button
-                key={pill}
-                onClick={() => setActivePill(pill)}
-                className={`shrink-0 px-3.5 py-1 rounded-full text-[12.5px] font-semibold transition-all ${
-                  activePill === pill
-                    ? "bg-black text-white shadow-sm"
-                    : "bg-white text-gray-700 border border-gray-200 shadow-sm"
-                }`}
-              >
-                {pill}
-              </button>
-            ))}
+          <div className="px-4 md:px-5 pt-12 md:pt-5 pb-4 max-w-[1280px] mx-auto w-full">
+            <h1 className="text-2xl font-extrabold tracking-tight text-gray-900">Local</h1>
+            <p className="text-[13px] text-gray-400 mt-0.5">Trending AI photo templates</p>
           </div>
         </div>
 
