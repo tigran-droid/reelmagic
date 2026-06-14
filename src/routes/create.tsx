@@ -434,14 +434,14 @@ function CreatePage() {
 
   if (!reel) {
     return (
-      <div className="min-h-dvh grid place-items-center bg-background">
-        <Loader2 className="size-6 animate-spin text-muted-foreground" />
+      <div className="min-h-dvh grid place-items-center bg-[#0f0f11]">
+        <Loader2 className="size-6 animate-spin text-violet-400" />
       </div>
     );
   }
 
   return (
-    <div className="relative h-dvh flex flex-col bg-[oklch(0.97_0.01_240)] text-foreground">
+    <div className="relative h-dvh flex flex-col bg-[#0f0f11] text-white">
       {showAuth && <AuthModal onClose={() => setShowAuth(false)} defaultMode="signup" />}
       {showPaywall && (
         <PaywallModal
@@ -451,11 +451,11 @@ function CreatePage() {
       )}
 
       {/* Header */}
-      <header className="flex items-center justify-between px-4 pt-3 pb-1">
+      <header className="flex items-center justify-between px-4 pt-3 pb-1 border-b border-white/5">
         <button
           type="button"
           onClick={() => window.history.back()}
-          className="size-9 -ml-2 grid place-items-center rounded-full text-foreground/80 active:bg-black/5"
+          className="size-9 -ml-2 grid place-items-center rounded-full text-white/70 active:bg-white/10"
           aria-label="Back"
         >
           <ArrowLeft className="size-5" />
@@ -463,55 +463,55 @@ function CreatePage() {
         <div className="flex items-center gap-3">
           <button
             type="button"
-            className="size-9 grid place-items-center rounded-md text-foreground/80 active:bg-black/5"
+            className="size-9 grid place-items-center rounded-xl text-white/70 active:bg-white/10"
             aria-label="New chat"
           >
             <MessageSquarePlus className="size-[22px]" />
           </button>
           <button
             type="button"
-            className="relative size-9 grid place-items-center rounded-md text-foreground/80 active:bg-black/5"
+            className="relative size-9 grid place-items-center rounded-xl text-white/70 active:bg-white/10"
             aria-label="History"
           >
             <History className="size-[22px]" />
-            <span className="absolute top-1.5 right-1.5 size-1.5 rounded-full bg-red-500" />
+            <span className="absolute top-1.5 right-1.5 size-1.5 rounded-full bg-violet-400" />
           </button>
         </div>
       </header>
 
-      <p className="text-center text-[13px] text-muted-foreground pb-1">
+      <p className="text-center text-[12px] text-white/30 py-1.5">
         Responses are AI-generated. Please double-check.
       </p>
 
       {/* Usage / auth indicator */}
       {!user ? (
-        <div className="mx-4 mb-3 flex items-center justify-between bg-violet-50 border border-violet-200 rounded-xl px-4 py-2.5">
-          <div className="text-xs text-violet-700 font-semibold">Sign in to start generating</div>
+        <div className="mx-4 mb-3 flex items-center justify-between bg-violet-950/60 border border-violet-500/20 rounded-2xl px-4 py-2.5">
+          <div className="text-xs text-violet-300 font-semibold">Sign in to start generating</div>
           <button
             onClick={() => setShowAuth(true)}
-            className="text-xs font-bold text-violet-600 bg-violet-100 hover:bg-violet-200 px-3 py-1.5 rounded-lg transition-colors"
+            className="text-xs font-bold text-white bg-violet-600 hover:bg-violet-500 px-3 py-1.5 rounded-lg transition-colors"
           >
             Sign in
           </button>
         </div>
       ) : canAfford ? (
-        <div className="mx-4 mb-3 flex items-center gap-2 bg-violet-50 border border-violet-100 rounded-xl px-4 py-2">
-          <Sparkles className="size-3.5 text-violet-500 shrink-0" />
-          <span className="text-xs text-violet-700 font-medium">
-            <span className="font-extrabold">{credits}</span> credit{credits !== 1 ? "s" : ""} left
+        <div className="mx-4 mb-3 flex items-center gap-2 bg-violet-950/40 border border-violet-500/15 rounded-2xl px-4 py-2">
+          <Sparkles className="size-3.5 text-violet-400 shrink-0" />
+          <span className="text-xs text-violet-300 font-medium">
+            <span className="font-extrabold text-white">{credits}</span> credit{credits !== 1 ? "s" : ""} left
           </span>
-          <span className="ml-auto text-[11px] text-violet-500 font-semibold">
-            {PHOTO_COST} credits / photo
+          <span className="ml-auto text-[11px] text-violet-400 font-semibold">
+            {PHOTO_COST} per photo
           </span>
         </div>
       ) : (
-        <div className="mx-4 mb-3 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5">
-          <div className="text-xs text-amber-700 font-semibold">
-            Not enough credits ({credits} left) — upgrade to continue
+        <div className="mx-4 mb-3 flex items-center justify-between bg-orange-950/50 border border-orange-500/20 rounded-2xl px-4 py-2.5">
+          <div className="text-xs text-orange-300 font-semibold">
+            Not enough credits ({credits} left)
           </div>
           <button
             onClick={() => setShowPaywall(true)}
-            className="text-xs font-bold text-white bg-amber-500 hover:bg-amber-400 px-3 py-1.5 rounded-lg transition-colors"
+            className="text-xs font-bold text-white bg-orange-500 hover:bg-orange-400 px-3 py-1.5 rounded-lg transition-colors"
           >
             Upgrade
           </button>
@@ -531,7 +531,7 @@ function CreatePage() {
       {/* Composer */}
       <form
         onSubmit={onSubmit}
-        className="px-3 pt-2 pb-4 bg-transparent"
+        className="px-3 pt-2 pb-5"
       >
         <input
           ref={moreInputRef}
@@ -546,12 +546,12 @@ function CreatePage() {
         {stagedImages.length > 0 && (
           <div className="flex gap-2 mb-2 px-1">
             {stagedImages.map((src, i) => (
-              <div key={i} className="relative size-16 rounded-xl overflow-hidden bg-black shrink-0">
+              <div key={i} className="relative size-16 rounded-2xl overflow-hidden ring-1 ring-violet-500/40 shrink-0">
                 <img src={src} alt="" className="w-full h-full object-cover" />
                 <button
                   type="button"
                   onClick={() => setStagedImages((prev) => prev.filter((_, j) => j !== i))}
-                  className="absolute top-0.5 right-0.5 size-5 rounded-full bg-black/70 text-white flex items-center justify-center"
+                  className="absolute top-0.5 right-0.5 size-5 rounded-full bg-black/80 text-white flex items-center justify-center"
                   aria-label="Remove photo"
                 >
                   <X className="size-3" />
@@ -561,12 +561,12 @@ function CreatePage() {
           </div>
         )}
 
-        <div className="flex items-center gap-2 bg-white rounded-full pl-3 pr-1.5 py-1.5 shadow-sm border border-black/5">
+        <div className="flex items-center gap-2 bg-[#1c1c26] rounded-2xl pl-3 pr-1.5 py-1.5 ring-1 ring-white/8">
           <button
             type="button"
             onClick={() => !busy && moreInputRef.current?.click()}
             disabled={busy}
-            className="size-9 grid place-items-center rounded-full text-foreground/70 active:bg-black/5 disabled:opacity-40"
+            className="size-9 grid place-items-center rounded-xl text-white/50 hover:text-white/80 hover:bg-white/8 disabled:opacity-30 transition-colors"
             aria-label="Attach photos"
           >
             <Plus className="size-5" />
@@ -575,12 +575,12 @@ function CreatePage() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder={busy ? "Generating…" : "Enter your ideas"}
-            className="flex-1 bg-transparent outline-none text-[15px] placeholder:text-muted-foreground/70"
+            className="flex-1 bg-transparent outline-none text-[15px] text-white placeholder:text-white/30"
             disabled={busy}
           />
           <button
             type="button"
-            className="size-9 grid place-items-center rounded-full text-foreground/70 active:bg-black/5"
+            className="size-9 grid place-items-center rounded-xl text-white/50 disabled:opacity-30"
             aria-label="Voice"
             disabled={busy}
           >
@@ -589,10 +589,10 @@ function CreatePage() {
           <button
             type="submit"
             disabled={!busy && !input.trim() && stagedImages.length === 0}
-            className={`size-10 grid place-items-center rounded-full text-white ${
+            className={`size-10 grid place-items-center rounded-xl text-white transition-all ${
               busy
-                ? "bg-red-500 active:bg-red-600"
-                : "bg-black disabled:opacity-50"
+                ? "bg-red-500/90 active:bg-red-600"
+                : "bg-gradient-to-br from-violet-600 to-pink-500 disabled:opacity-30 shadow-lg shadow-violet-900/40"
             }`}
             aria-label={busy ? "Stop" : "Send"}
           >
@@ -648,7 +648,7 @@ function MessageBubble({
   if (msg.role === "user" && msg.kind === "text") {
     return (
       <div className="flex justify-end">
-        <div className="max-w-[80%] bg-white rounded-2xl px-3.5 py-2.5 text-[15px] shadow-sm border border-black/5">
+        <div className="max-w-[80%] bg-gradient-to-br from-violet-600 to-violet-800 rounded-2xl rounded-tr-md px-3.5 py-2.5 text-[15px] text-white shadow-lg shadow-violet-900/30">
           {msg.text}
         </div>
       </div>
@@ -658,14 +658,14 @@ function MessageBubble({
   if (msg.role === "assistant" && msg.kind === "ref") {
     return (
       <div className="flex justify-end">
-        <div className="max-w-[80%] bg-white rounded-2xl p-2.5 shadow-sm border border-black/5 flex items-center gap-2.5">
-          <span className="text-foreground/40 text-lg leading-none">↳</span>
+        <div className="max-w-[80%] bg-[#1e1e2a] rounded-2xl rounded-tr-md p-2.5 ring-1 ring-white/8 flex items-center gap-2.5">
+          <span className="text-white/30 text-lg leading-none">↳</span>
           <img
             src={msg.templateUrl}
             alt="Reference reel"
-            className="size-9 rounded-md object-cover"
+            className="size-9 rounded-xl object-cover"
           />
-          <span className="text-[15px] text-foreground pr-1">{msg.label}</span>
+          <span className="text-[15px] text-white/90 pr-1">{msg.label}</span>
         </div>
       </div>
     );
@@ -682,7 +682,7 @@ function MessageBubble({
   if (msg.role === "assistant" && msg.kind === "error") {
     return (
       <div className="flex">
-        <div className="max-w-[85%] rounded-2xl bg-red-50 border border-red-200 text-red-700 px-3.5 py-2.5 text-[14px] flex items-start gap-2">
+        <div className="max-w-[85%] rounded-2xl bg-red-950/60 ring-1 ring-red-500/30 text-red-300 px-3.5 py-2.5 text-[14px] flex items-start gap-2">
           <X className="size-4 mt-0.5 shrink-0" />
           <span>{msg.text}</span>
         </div>
@@ -720,18 +720,18 @@ function GenerationStatusBubble({
 
   return (
     <div className="flex">
-      <div className="w-[286px] rounded-[28px] bg-white border border-black/5 shadow-sm overflow-hidden">
+      <div className="w-[286px] rounded-[28px] bg-[#1a1a24] ring-1 ring-white/8 overflow-hidden">
         <div className="px-4 py-3 flex items-center gap-3">
           <div className="relative size-10 shrink-0">
-            <div className="absolute inset-0 rounded-full border-2 border-sky-100" />
-            <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-sky-500 animate-spin" />
-            <Sparkles className="absolute inset-0 m-auto size-4 text-sky-500" />
+            <div className="absolute inset-0 rounded-full border-2 border-violet-900/60" />
+            <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-violet-400 animate-spin" />
+            <Sparkles className="absolute inset-0 m-auto size-4 text-violet-400" />
           </div>
           <div className="min-w-0">
-            <div className="text-[15px] font-bold text-sky-500 leading-tight">
+            <div className="text-[15px] font-bold text-violet-300 leading-tight">
               {seconds < 2 ? msg.text : stage}
             </div>
-            <div className="text-[11px] text-muted-foreground mt-0.5">
+            <div className="text-[11px] text-white/30 mt-0.5">
               Keep this screen open
             </div>
           </div>
@@ -739,27 +739,27 @@ function GenerationStatusBubble({
 
         {previewSrc && seconds >= 2 && (
           <div className="px-3 pb-3">
-            <div className="relative aspect-[3/4] overflow-hidden rounded-2xl bg-[oklch(0.92_0.02_245)]">
+            <div className="relative aspect-[3/4] overflow-hidden rounded-2xl bg-[#0d0d14]">
               <img
                 src={previewSrc}
                 alt=""
                 className="absolute inset-0 size-full object-cover transition-all duration-700"
                 style={{
                   opacity: previewOpacity,
-                  filter: `blur(${previewBlur}px) saturate(1.08)`,
+                  filter: `blur(${previewBlur}px) saturate(1.1)`,
                   transform: "scale(1.08)",
                 }}
               />
-              <div className="absolute inset-0 bg-gradient-to-br from-white/70 via-sky-100/35 to-black/15" />
+              <div className="absolute inset-0 bg-gradient-to-br from-violet-950/70 via-transparent to-black/40" />
               <div className="absolute inset-x-4 bottom-4">
-                <div className="h-1.5 overflow-hidden rounded-full bg-white/70">
+                <div className="h-1 overflow-hidden rounded-full bg-white/10">
                   <div
-                    className="h-full rounded-full bg-sky-500 transition-all duration-700"
+                    className="h-full rounded-full bg-gradient-to-r from-violet-500 to-pink-500 transition-all duration-700"
                     style={{ width: `${progress}%` }}
                   />
                 </div>
-                <div className="mt-2 text-[11px] font-semibold text-white drop-shadow">
-                  Generating preview...
+                <div className="mt-2 text-[11px] font-semibold text-white/70">
+                  Generating…
                 </div>
               </div>
             </div>
