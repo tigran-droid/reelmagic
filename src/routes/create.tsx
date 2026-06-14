@@ -778,32 +778,66 @@ function GeneratedImageBubble({
   filenameBase: string;
 }) {
   const [loaded, setLoaded] = useState(false);
+  const [lightbox, setLightbox] = useState(false);
 
   return (
-    <div className="flex">
-      <div className="relative rounded-2xl overflow-hidden bg-black w-[260px]">
-        {!loaded && (
-          <div className="absolute inset-0 z-10 grid place-items-center bg-sky-50">
-            <Loader2 className="size-6 animate-spin text-sky-500" />
-          </div>
-        )}
-        <img
-          src={imageDataUrl}
-          alt="Generated"
-          onLoad={() => setLoaded(true)}
-          className={`w-full aspect-[3/4] object-cover transition-all duration-1000 ${
-            loaded ? "opacity-100 blur-0 scale-100" : "opacity-30 blur-xl scale-105"
-          }`}
-        />
-        <a
-          href={imageDataUrl}
-          download={`${filenameBase}.png`}
-          className="absolute bottom-2 right-2 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-white/90 text-foreground text-[11px] font-semibold shadow"
-        >
-          <Download className="size-3.5" />
-          Save
-        </a>
+    <>
+      <div className="flex">
+        <div className="relative rounded-2xl overflow-hidden bg-black w-[260px]">
+          {!loaded && (
+            <div className="absolute inset-0 z-10 grid place-items-center bg-sky-50">
+              <Loader2 className="size-6 animate-spin text-sky-500" />
+            </div>
+          )}
+          <img
+            src={imageDataUrl}
+            alt="Generated"
+            onLoad={() => setLoaded(true)}
+            onClick={() => loaded && setLightbox(true)}
+            className={`w-full aspect-[3/4] object-cover transition-all duration-1000 cursor-zoom-in ${
+              loaded ? "opacity-100 blur-0 scale-100" : "opacity-30 blur-xl scale-105"
+            }`}
+          />
+          <a
+            href={imageDataUrl}
+            download={`${filenameBase}.png`}
+            className="absolute bottom-2 right-2 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-white/90 text-foreground text-[11px] font-semibold shadow"
+          >
+            <Download className="size-3.5" />
+            Save
+          </a>
+        </div>
       </div>
-    </div>
+
+      {/* Fullscreen lightbox */}
+      {lightbox && (
+        <div
+          className="fixed inset-0 z-[999] bg-black/95 flex flex-col items-center justify-center"
+          onClick={() => setLightbox(false)}
+        >
+          <button
+            className="absolute top-4 right-4 size-10 rounded-full bg-white/10 text-white flex items-center justify-center"
+            onClick={() => setLightbox(false)}
+          >
+            <X className="size-5" />
+          </button>
+          <img
+            src={imageDataUrl}
+            alt="Generated"
+            onClick={(e) => e.stopPropagation()}
+            className="max-w-full max-h-[90dvh] object-contain rounded-xl shadow-2xl"
+          />
+          <a
+            href={imageDataUrl}
+            download={`${filenameBase}.png`}
+            onClick={(e) => e.stopPropagation()}
+            className="mt-4 inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-white text-black text-sm font-semibold shadow"
+          >
+            <Download className="size-4" />
+            Save photo
+          </a>
+        </div>
+      )}
+    </>
   );
 }
