@@ -239,6 +239,7 @@ function CreatePage() {
           userImages: string[];
           prompt?: string;
           editImageDataUrl?: string;
+          keepTemplateOutfit?: boolean;
         },
         {
           operationName?: string;
