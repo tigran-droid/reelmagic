@@ -38,6 +38,7 @@ type DraftReel = {
   title: string;
   hashtags: string[];
   prompt?: string | null;
+  keepTemplateOutfit?: boolean;
 };
 
 type ChatMessage =
@@ -150,7 +151,6 @@ function CreatePage() {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [stagedImages, setStagedImages] = useState<string[]>([]);
-  const [myOutfit, setMyOutfit] = useState(true);
   const [showAuth, setShowAuth] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -191,7 +191,6 @@ function CreatePage() {
   const runGeneration = async (
     imgs: string[],
     promptText?: string,
-    useMyOutfit?: boolean,
   ) => {
     if (!reel || !templateUrl || imgs.length === 0) return;
 
@@ -256,7 +255,7 @@ function CreatePage() {
             userImages: requestUserImages,
             ...(customPrompt ? { prompt: customPrompt } : {}),
             ...(editImageDataUrl ? { editImageDataUrl } : {}),
-            keepTemplateOutfit: !(useMyOutfit ?? myOutfit),
+            keepTemplateOutfit: reel.keepTemplateOutfit ?? false,
           },
         },
       );
@@ -370,7 +369,7 @@ function CreatePage() {
       sessionStorage.removeItem(AUTORUN_KEY);
       // tiny delay so the UI paints the seeded messages first
       setTimeout(() => {
-        void runGeneration(userImages, undefined, myOutfit);
+        void runGeneration(userImages, undefined);
       }, 50);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -409,7 +408,7 @@ function CreatePage() {
       ];
       if (text) newMsgs.push({ id: uid(), role: "user", kind: "text", text });
       setMessages((m) => [...m, ...newMsgs]);
-      await runGeneration(imgs, text || undefined, myOutfit);
+      await runGeneration(imgs, text || undefined);
     } else {
       // Text-only message — re-generate with the current user images
       if (userImages.length === 0) return;
@@ -417,7 +416,7 @@ function CreatePage() {
         ...m,
         { id: uid(), role: "user", kind: "text", text },
       ]);
-      await runGeneration(userImages, text, myOutfit);
+      await runGeneration(userImages, text);
     }
   };
 
@@ -545,22 +544,6 @@ function CreatePage() {
           onChange={onPickMore}
           className="hidden"
         />
-
-        {/* Outfit mode toggle — small, right-aligned */}
-        <div className="flex justify-end mb-2 px-1">
-          <button
-            type="button"
-            onClick={() => setMyOutfit((v) => !v)}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all ${
-              myOutfit
-                ? "bg-violet-600/30 text-violet-300 ring-1 ring-violet-500/40"
-                : "bg-white/6 text-white/30 ring-1 ring-white/10"
-            }`}
-          >
-            <span>{myOutfit ? "👗" : "🧥"}</span>
-            {myOutfit ? "My outfit" : "Template outfit"}
-          </button>
-        </div>
 
         {/* Staged image previews */}
         {stagedImages.length > 0 && (

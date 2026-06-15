@@ -16,6 +16,7 @@ type Item = {
   audioStart: number;
   audioEnd: number | null;
   prompt?: string | null;
+  keepTemplateOutfit?: boolean;
 };
 
 type FeedItemRow = {
@@ -29,10 +30,14 @@ type FeedItemRow = {
   audio_start_sec: number | string | null;
   audio_end_sec: number | string | null;
   prompt?: string | null;
+  keep_template_outfit?: boolean | null;
   created_at: string;
 };
 
 const FEED_SELECT =
+  "id,image_url,image_urls,title,hashtags,song,audio_url,audio_start_sec,audio_end_sec,prompt,keep_template_outfit,created_at";
+// `reels` has no per-template outfit mode column — keep its select separate.
+const REELS_SELECT =
   "id,image_url,image_urls,title,hashtags,song,audio_url,audio_start_sec,audio_end_sec,prompt,created_at";
 const FEED_PAGE_SIZE = 120;
 
@@ -49,6 +54,7 @@ function mapRow(r: FeedItemRow): Item {
     audioStart: Number(r.audio_start_sec ?? 0),
     audioEnd: r.audio_end_sec != null ? Number(r.audio_end_sec) : null,
     prompt: r.prompt ?? null,
+    keepTemplateOutfit: r.keep_template_outfit ?? false,
   };
 }
 const CACHE_TIME_MS = 5 * 60_000;
@@ -141,7 +147,7 @@ function PhotoshopFeed() {
       if (isLocal) {
         const reelsQuery = supabase
           .from("reels")
-          .select(FEED_SELECT)
+          .select(REELS_SELECT)
           .order("created_at", { ascending: false })
           .range(0, FEED_PAGE_SIZE - 1);
 
@@ -251,6 +257,7 @@ function PhotoshopFeed() {
       sessionStorage.setItem("create:draft", JSON.stringify({
         images: it.images, cover: it.cover, title: it.title, hashtags: it.hashtags,
         prompt: it.prompt ?? null,
+        keepTemplateOutfit: it.keepTemplateOutfit ?? false,
       }));
     } catch { /* noop */ }
     pendingRef.current = it;

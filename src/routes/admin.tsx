@@ -247,13 +247,14 @@ function PhotoRow({
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(it.prompt ?? DEFAULT_PHOTOSHOP_PROMPT);
+  const [keepOutfit, setKeepOutfit] = useState(it.keep_template_outfit ?? false);
   const [saving, setSaving] = useState(false);
 
   const save = async () => {
     setSaving(true);
     const { error } = await supabase
       .from("photoshop_items")
-      .update({ prompt: draft.trim() || null })
+      .update({ prompt: draft.trim() || null, keep_template_outfit: keepOutfit })
       .eq("id", it.id);
     setSaving(false);
     if (error) { alert(error.message); return; }
@@ -296,6 +297,42 @@ function PhotoRow({
           <p className="text-[10px] text-muted-foreground">
             AI prompt used when a user recreates this template. Leave as default for face replacement; customize per item (e.g. swap whole body, swap outfit only).
           </p>
+
+          {/* Outfit mode — admin only. Controls whether the user's own clothes
+              are copied, or only the face is swapped onto the template. */}
+          <div className="rounded-lg border border-border p-2 space-y-1.5">
+            <p className="text-[10px] font-semibold text-foreground">Outfit mode</p>
+            <div className="grid grid-cols-2 gap-1.5">
+              <button
+                type="button"
+                onClick={() => setKeepOutfit(false)}
+                className={`rounded-md px-2 py-1.5 text-[11px] font-semibold border ${
+                  !keepOutfit
+                    ? "bg-brand text-white border-brand"
+                    : "bg-background text-muted-foreground border-border"
+                }`}
+              >
+                Face + body/clothes
+              </button>
+              <button
+                type="button"
+                onClick={() => setKeepOutfit(true)}
+                className={`rounded-md px-2 py-1.5 text-[11px] font-semibold border ${
+                  keepOutfit
+                    ? "bg-brand text-white border-brand"
+                    : "bg-background text-muted-foreground border-border"
+                }`}
+              >
+                Face only
+              </button>
+            </div>
+            <p className="text-[9px] text-muted-foreground">
+              {keepOutfit
+                ? "Only the face is swapped; the template's outfit is kept."
+                : "Default — the user's own clothes are copied onto the template."}
+            </p>
+          </div>
+
           <textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
@@ -593,6 +630,7 @@ type PhotoshopItem = {
   position: number;
   created_at: string;
   prompt: string | null;
+  keep_template_outfit: boolean;
 };
 
 /** Default prompt. Outfit behavior is controlled by the user's outfit-mode toggle — do not mention wardrobe here. */

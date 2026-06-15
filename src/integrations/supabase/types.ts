@@ -57,6 +57,7 @@ export type Database = {
           id: string
           image_url: string
           image_urls: string[]
+          keep_template_outfit: boolean
           position: number
           prompt: string | null
           section_id: string
@@ -72,6 +73,7 @@ export type Database = {
           id?: string
           image_url: string
           image_urls?: string[]
+          keep_template_outfit?: boolean
           position?: number
           prompt?: string | null
           section_id: string
@@ -87,6 +89,7 @@ export type Database = {
           id?: string
           image_url?: string
           image_urls?: string[]
+          keep_template_outfit?: boolean
           position?: number
           prompt?: string | null
           section_id?: string
