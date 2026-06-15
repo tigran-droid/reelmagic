@@ -255,6 +255,7 @@ function PhotoRow({
   const [mTitle, setMTitle] = useState(it.title);
   const [mTags, setMTags] = useState(it.hashtags.join(" "));
   const [mSong, setMSong] = useState(it.song ?? "");
+  const [mImages, setMImages] = useState<File[]>([]);
   const [savingMeta, setSavingMeta] = useState(false);
 
   const save = async () => {
@@ -272,18 +273,37 @@ function PhotoRow({
   const saveMeta = async () => {
     if (!mTitle.trim()) { alert("Title can't be empty."); return; }
     setSavingMeta(true);
-    const { error } = await supabase
-      .from("photoshop_items")
-      .update({
+    try {
+      const update: {
+        title: string;
+        hashtags: string[];
+        song: string | null;
+        image_url?: string;
+        image_urls?: string[];
+      } = {
         title: mTitle.trim(),
         hashtags: parseTags(mTags),
         song: mSong.trim() || null,
-      })
-      .eq("id", it.id);
-    setSavingMeta(false);
-    if (error) { alert(error.message); return; }
-    setEditMeta(false);
-    onChange();
+      };
+      // Optional photo replacement — only touch images if new ones were picked.
+      if (mImages.length > 0) {
+        const urls = await Promise.all(mImages.map((f) => uploadFile("reel-images", f)));
+        update.image_url = urls[0];
+        update.image_urls = urls;
+      }
+      const { error } = await supabase
+        .from("photoshop_items")
+        .update(update)
+        .eq("id", it.id);
+      if (error) throw error;
+      setMImages([]);
+      setEditMeta(false);
+      onChange();
+    } catch (err: unknown) {
+      alert((err as { message?: string }).message ?? "Save failed");
+    } finally {
+      setSavingMeta(false);
+    }
   };
 
   const isCustom = !!(it.prompt && it.prompt.trim());
@@ -337,6 +357,11 @@ function PhotoRow({
           </Field>
           <Field label="Song name">
             <Input value={mSong} onChange={setMSong} placeholder="Track — Artist" />
+          </Field>
+          <Field label="Replace photos (optional)">
+            <FilePicker icon={<ImageIcon className="size-4" />} multiple accept="image/*"
+              placeholder={mImages.length === 0 ? "Keep current photo" : `${mImages.length} new photo${mImages.length === 1 ? "" : "s"}`}
+              onChange={setMImages} />
           </Field>
           <div className="flex gap-2">
             <button onClick={saveMeta} disabled={savingMeta}

@@ -325,10 +325,14 @@ function PhotoshopFeed() {
       >
         <ArrowLeft className="size-5" />
       </button>
+      {/* On desktop the reel column is centered at a phone width over a black
+          backdrop, so the 9:16 media keeps its aspect instead of stretching
+          across the full content area. */}
+      <div className="md:flex md:justify-center md:bg-black md:min-h-dvh">
       <div
         ref={scrollerRef}
         onScroll={handleScroll}
-        className="h-dvh overflow-y-scroll snap-y snap-mandatory no-scrollbar"
+        className="h-dvh w-full md:w-[min(440px,calc(100dvh*9/16))] md:shrink-0 md:shadow-2xl md:shadow-black/60 overflow-y-scroll snap-y snap-mandatory no-scrollbar"
       >
         {items.map((r, i) => (
           <ReelCard
@@ -375,6 +379,7 @@ function PhotoshopFeed() {
           <Sparkles className="size-7 animate-pulse" />
           <p className="text-sm font-semibold">Keep exploring templates…</p>
         </div>
+      </div>
       </div>
     </MobileFrame>
   );
