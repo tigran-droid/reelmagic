@@ -126,20 +126,30 @@ function Photoshop() {
                 <X className="size-4" />
               </button>
             </div>
-            <div className="space-y-1.5">
-              {sections.map((s) => (
-                <button
-                  key={s.id}
-                  onClick={() => goCategory(s.id)}
-                  className="w-full flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-secondary hover:bg-secondary/70 transition-colors text-left"
-                >
-                  <span className="font-semibold text-sm truncate">{s.title}</span>
-                  <span className="flex items-center gap-2 shrink-0">
-                    <span className="text-[11px] text-muted-foreground tabular-nums">{s.items.length}</span>
-                    <ChevronRight className="size-4 text-muted-foreground" strokeWidth={2.5} />
-                  </span>
-                </button>
-              ))}
+            <div className="grid grid-cols-2 gap-3">
+              {sections.map((s) => {
+                const cover = s.items[0]?.image_urls?.[0] ?? s.items[0]?.image_url ?? "";
+                return (
+                  <button
+                    key={s.id}
+                    onClick={() => goCategory(s.id)}
+                    className="relative aspect-square rounded-2xl overflow-hidden bg-secondary ring-1 ring-border text-left active:scale-[0.97] transition-transform"
+                  >
+                    {cover ? (
+                      <img src={cover} alt={s.title} loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
+                    ) : (
+                      <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
+                        <Sparkles className="size-6" />
+                      </div>
+                    )}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
+                    <div className="absolute bottom-2.5 left-3 right-3">
+                      <div className="text-white text-[15px] font-extrabold leading-tight truncate">{s.title}</div>
+                      <div className="text-white/80 text-[11px] font-semibold tabular-nums">{s.items.length} templates</div>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
