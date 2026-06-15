@@ -127,36 +127,6 @@ export type Database = {
         }
         Relationships: []
       }
-      saved_items: {
-        Row: {
-          created_at: string
-          id: string
-          image_url: string | null
-          item_id: string
-          source: string
-          title: string | null
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          image_url?: string | null
-          item_id: string
-          source?: string
-          title?: string | null
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          image_url?: string | null
-          item_id?: string
-          source?: string
-          title?: string | null
-          user_id?: string
-        }
-        Relationships: []
-      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -226,6 +196,36 @@ export type Database = {
           prompt?: string | null
           song?: string | null
           title?: string
+        }
+        Relationships: []
+      }
+      saved_items: {
+        Row: {
+          created_at: string
+          id: string
+          image_url: string | null
+          item_id: string
+          source: string
+          title: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          image_url?: string | null
+          item_id: string
+          source?: string
+          title?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          image_url?: string | null
+          item_id?: string
+          source?: string
+          title?: string | null
+          user_id?: string
         }
         Relationships: []
       }
