@@ -16,6 +16,7 @@ import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as PhotoshopRouteImport } from './routes/photoshop'
 import { Route as FeedRouteImport } from './routes/feed'
 import { Route as CreateRouteImport } from './routes/create'
+import { Route as CategoryRouteImport } from './routes/category'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as AccountRouteImport } from './routes/account'
 import { Route as IndexRouteImport } from './routes/index'
@@ -56,6 +57,11 @@ const CreateRoute = CreateRouteImport.update({
   path: '/create',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CategoryRoute = CategoryRouteImport.update({
+  id: '/category',
+  path: '/category',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminRoute = AdminRouteImport.update({
   id: '/admin',
   path: '/admin',
@@ -81,6 +87,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/account': typeof AccountRoute
   '/admin': typeof AdminRoute
+  '/category': typeof CategoryRoute
   '/create': typeof CreateRoute
   '/feed': typeof FeedRoute
   '/photoshop': typeof PhotoshopRoute
@@ -94,6 +101,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/account': typeof AccountRoute
   '/admin': typeof AdminRoute
+  '/category': typeof CategoryRoute
   '/create': typeof CreateRoute
   '/feed': typeof FeedRoute
   '/photoshop': typeof PhotoshopRoute
@@ -108,6 +116,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/account': typeof AccountRoute
   '/admin': typeof AdminRoute
+  '/category': typeof CategoryRoute
   '/create': typeof CreateRoute
   '/feed': typeof FeedRoute
   '/photoshop': typeof PhotoshopRoute
@@ -123,6 +132,7 @@ export interface FileRouteTypes {
     | '/'
     | '/account'
     | '/admin'
+    | '/category'
     | '/create'
     | '/feed'
     | '/photoshop'
@@ -136,6 +146,7 @@ export interface FileRouteTypes {
     | '/'
     | '/account'
     | '/admin'
+    | '/category'
     | '/create'
     | '/feed'
     | '/photoshop'
@@ -149,6 +160,7 @@ export interface FileRouteTypes {
     | '/'
     | '/account'
     | '/admin'
+    | '/category'
     | '/create'
     | '/feed'
     | '/photoshop'
@@ -163,6 +175,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AccountRoute: typeof AccountRoute
   AdminRoute: typeof AdminRoute
+  CategoryRoute: typeof CategoryRoute
   CreateRoute: typeof CreateRoute
   FeedRoute: typeof FeedRoute
   PhotoshopRoute: typeof PhotoshopRoute
@@ -224,6 +237,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CreateRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/category': {
+      id: '/category'
+      path: '/category'
+      fullPath: '/category'
+      preLoaderRoute: typeof CategoryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin': {
       id: '/admin'
       path: '/admin'
@@ -259,6 +279,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AccountRoute: AccountRoute,
   AdminRoute: AdminRoute,
+  CategoryRoute: CategoryRoute,
   CreateRoute: CreateRoute,
   FeedRoute: FeedRoute,
   PhotoshopRoute: PhotoshopRoute,

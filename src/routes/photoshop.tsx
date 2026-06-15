@@ -1,9 +1,10 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { MobileFrame } from "@/components/MobileFrame";
 import { InstallCard } from "@/components/InstallPrompt";
-import { ChevronRight, Sparkles, SlidersHorizontal } from "lucide-react";
+import { ChevronRight, Sparkles, SlidersHorizontal, X } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useState } from "react";
 
 export const Route = createFileRoute("/photoshop")({
   head: () => ({
@@ -41,6 +42,7 @@ const CACHE_TIME_MS = 5 * 60_000;
 
 function Photoshop() {
   const navigate = useNavigate();
+  const [showFilter, setShowFilter] = useState(false);
 
   const q = useQuery({
     queryKey: ["photoshop-sections"],
@@ -85,16 +87,63 @@ function Photoshop() {
     .filter(Boolean)
     .slice(0, 2);
 
-  const goItem = (id: string) => navigate({ to: "/photoshop/feed", search: { item: id } });
+  const goItem = (id: string) => navigate({ to: "/photoshop/feed", search: { item: id, from: undefined } });
+  const goCategory = (sectionId: string) => {
+    setShowFilter(false);
+    navigate({ to: "/category", search: { section: sectionId } });
+  };
 
   return (
     <MobileFrame>
       <header className="px-5 pt-8 pb-2 flex items-center justify-between">
         <h1 className="text-2xl font-extrabold tracking-tight">Photoshop</h1>
-        <button className="size-9 rounded-full bg-secondary border border-border flex items-center justify-center">
+        <button
+          onClick={() => setShowFilter(true)}
+          disabled={sections.length === 0}
+          className="size-9 rounded-full bg-secondary border border-border flex items-center justify-center disabled:opacity-40"
+          aria-label="Filter by category"
+        >
           <SlidersHorizontal className="size-4" strokeWidth={2.5} />
         </button>
       </header>
+
+      {/* Category filter sheet — lists every category; picking one opens its page */}
+      {showFilter && (
+        <div className="fixed inset-0 z-[60] flex items-end md:items-center md:justify-center">
+          <button
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => setShowFilter(false)}
+            aria-label="Close"
+          />
+          <div className="relative w-full md:max-w-md max-h-[75vh] overflow-y-auto bg-background rounded-t-3xl md:rounded-3xl border border-border p-5 pb-8 md:pb-5 shadow-2xl">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-extrabold tracking-tight">Categories</h2>
+              <button
+                onClick={() => setShowFilter(false)}
+                className="size-8 rounded-full bg-secondary flex items-center justify-center text-muted-foreground"
+                aria-label="Close"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+            <div className="space-y-1.5">
+              {sections.map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => goCategory(s.id)}
+                  className="w-full flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-secondary hover:bg-secondary/70 transition-colors text-left"
+                >
+                  <span className="font-semibold text-sm truncate">{s.title}</span>
+                  <span className="flex items-center gap-2 shrink-0">
+                    <span className="text-[11px] text-muted-foreground tabular-nums">{s.items.length}</span>
+                    <ChevronRight className="size-4 text-muted-foreground" strokeWidth={2.5} />
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {featured.length > 0 && (
         <section className="px-5 pt-3 pb-5">
@@ -135,7 +184,10 @@ function Photoshop() {
           <section key={s.id} className="px-5">
             <div className="mb-3 flex justify-between items-center">
               <h3 className="text-[19px] font-extrabold tracking-tight">{s.title}</h3>
-              <button className="flex items-center gap-0.5 px-3 py-1 rounded-full border border-border text-[11px] font-bold text-foreground">
+              <button
+                onClick={() => goCategory(s.id)}
+                className="flex items-center gap-0.5 px-3 py-1 rounded-full border border-border text-[11px] font-bold text-foreground hover:bg-secondary transition-colors"
+              >
                 All <ChevronRight className="size-3" strokeWidth={3} />
               </button>
             </div>
