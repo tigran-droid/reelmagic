@@ -822,6 +822,7 @@ function AddItemForm({ section, existingCount, onDone, onCancel }: {
   const [audioStart, setAudioStart] = useState(0);
   const [audioEnd, setAudioEnd] = useState<number | null>(null);
   const [prompt, setPrompt] = useState(DEFAULT_PHOTOSHOP_PROMPT);
+  const [keepOutfit, setKeepOutfit] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const submit = async () => {
@@ -845,6 +846,7 @@ function AddItemForm({ section, existingCount, onDone, onCancel }: {
         audio_end_sec: audio ? audioEnd : null,
         position: existingCount,
         prompt: prompt.trim() || null,
+        keep_template_outfit: keepOutfit,
       });
       if (error) throw error;
       onDone();
@@ -873,6 +875,37 @@ function AddItemForm({ section, existingCount, onDone, onCancel }: {
         <AudioTrimmer file={audio} start={audioStart} end={audioEnd}
           onChange={(s, e) => { setAudioStart(s); setAudioEnd(e); }} />
       )}
+      <Field label="What changes for the user">
+        <div className="grid grid-cols-2 gap-1.5">
+          <button
+            type="button"
+            onClick={() => setKeepOutfit(false)}
+            className={`rounded-lg px-2 py-2 text-xs font-semibold border ${
+              !keepOutfit
+                ? "bg-brand text-white border-brand"
+                : "bg-background text-muted-foreground border-border"
+            }`}
+          >
+            Face + body
+          </button>
+          <button
+            type="button"
+            onClick={() => setKeepOutfit(true)}
+            className={`rounded-lg px-2 py-2 text-xs font-semibold border ${
+              keepOutfit
+                ? "bg-brand text-white border-brand"
+                : "bg-background text-muted-foreground border-border"
+            }`}
+          >
+            Face only
+          </button>
+        </div>
+        <p className="mt-1 text-[10px] text-muted-foreground">
+          {keepOutfit
+            ? "Only the face is swapped — the template's body & clothes are kept."
+            : "Default — the face, body and clothes all become the user's."}
+        </p>
+      </Field>
       <Field label="AI prompt (used when a user recreates this template)">
         <textarea
           value={prompt}
