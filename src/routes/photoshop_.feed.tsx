@@ -207,23 +207,36 @@ function PhotoshopFeed() {
   }, [user]);
 
   const toggleSave = async (r: Item) => {
-    if (!user) return;
+    if (!user) { navigate({ to: "/account" }); return; }
     const isSaved = savedIds.has(r.id);
+    // Optimistic toggle
     setSavedIds((prev) => {
       const next = new Set(prev);
       if (isSaved) next.delete(r.id); else next.add(r.id);
       return next;
     });
-    if (isSaved) {
-      await supabase.from("saved_items").delete().eq("user_id", user.id).eq("item_id", r.id);
-    } else {
-      await supabase.from("saved_items").insert({
-        user_id: user.id,
-        item_id: r.id,
-        source: r.source,
-        title: r.title,
-        image_url: r.cover,
+    const { error } = isSaved
+      ? await supabase.from("saved_items").delete().eq("user_id", user.id).eq("item_id", r.id)
+      : await supabase.from("saved_items").insert({
+          user_id: user.id,
+          item_id: r.id,
+          source: r.source,
+          title: r.title,
+          image_url: r.cover,
+        });
+    if (error) {
+      // Revert the optimistic change and surface why it failed.
+      setSavedIds((prev) => {
+        const next = new Set(prev);
+        if (isSaved) next.add(r.id); else next.delete(r.id);
+        return next;
       });
+      const missingTable = error.message?.includes("saved_items") || error.code === "42P01";
+      alert(
+        missingTable
+          ? "Saving isn't set up yet: the saved_items table is missing in the database. Run the pending migration to enable it."
+          : `Couldn't save: ${error.message}`,
+      );
     }
   };
 
