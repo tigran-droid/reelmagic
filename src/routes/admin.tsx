@@ -250,6 +250,13 @@ function PhotoRow({
   const [keepOutfit, setKeepOutfit] = useState(it.keep_template_outfit ?? false);
   const [saving, setSaving] = useState(false);
 
+  // Details (title / hashtags / song) editing — separate panel from the prompt.
+  const [editMeta, setEditMeta] = useState(false);
+  const [mTitle, setMTitle] = useState(it.title);
+  const [mTags, setMTags] = useState(it.hashtags.join(" "));
+  const [mSong, setMSong] = useState(it.song ?? "");
+  const [savingMeta, setSavingMeta] = useState(false);
+
   const save = async () => {
     setSaving(true);
     const { error } = await supabase
@@ -259,6 +266,23 @@ function PhotoRow({
     setSaving(false);
     if (error) { alert(error.message); return; }
     setEditing(false);
+    onChange();
+  };
+
+  const saveMeta = async () => {
+    if (!mTitle.trim()) { alert("Title can't be empty."); return; }
+    setSavingMeta(true);
+    const { error } = await supabase
+      .from("photoshop_items")
+      .update({
+        title: mTitle.trim(),
+        hashtags: parseTags(mTags),
+        song: mSong.trim() || null,
+      })
+      .eq("id", it.id);
+    setSavingMeta(false);
+    if (error) { alert(error.message); return; }
+    setEditMeta(false);
     onChange();
   };
 
@@ -272,6 +296,17 @@ function PhotoRow({
           <p className="text-xs font-semibold truncate">{it.title}</p>
           <p className="text-[10px] text-muted-foreground truncate">{it.hashtags.join(" ")} {it.song && `· ${it.song}`}</p>
         </div>
+        <button
+          onClick={() => {
+            setMTitle(it.title); setMTags(it.hashtags.join(" ")); setMSong(it.song ?? "");
+            setEditMeta((v) => !v);
+          }}
+          className="p-1.5 text-muted-foreground hover:text-foreground"
+          aria-label="Edit details"
+          title="Edit title / hashtags / song"
+        >
+          <Pencil className="size-3.5" />
+        </button>
         <button
           onClick={() => { setDraft(it.prompt ?? DEFAULT_PHOTOSHOP_PROMPT); setEditing((v) => !v); }}
           className={`p-1.5 ${isCustom ? "text-brand" : "text-muted-foreground hover:text-foreground"}`}
@@ -292,6 +327,30 @@ function PhotoRow({
           <Trash2 className="size-3.5" />
         </button>
       </div>
+      {editMeta && (
+        <div className="border-t border-border p-2 space-y-2">
+          <Field label="Title">
+            <Input value={mTitle} onChange={setMTitle} placeholder="Pure focus" />
+          </Field>
+          <Field label="Hashtags">
+            <Input value={mTags} onChange={setMTags} placeholder="business, studio" />
+          </Field>
+          <Field label="Song name">
+            <Input value={mSong} onChange={setMSong} placeholder="Track — Artist" />
+          </Field>
+          <div className="flex gap-2">
+            <button onClick={saveMeta} disabled={savingMeta}
+              className="flex-1 inline-flex items-center justify-center gap-1 bg-brand text-white text-xs font-semibold rounded-md py-1.5 disabled:opacity-60">
+              {savingMeta ? <Loader2 className="size-3 animate-spin" /> : <Check className="size-3" />}
+              {savingMeta ? "Saving…" : "Save details"}
+            </button>
+            <button onClick={() => setEditMeta(false)} disabled={savingMeta}
+              className="px-2 text-xs font-semibold rounded-md bg-muted text-foreground">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
       {editing && (
         <div className="border-t border-border p-2 space-y-2">
           <p className="text-[10px] text-muted-foreground">

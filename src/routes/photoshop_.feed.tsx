@@ -35,9 +35,6 @@ type FeedItemRow = {
 };
 
 const FEED_SELECT =
-  "id,image_url,image_urls,title,hashtags,song,audio_url,audio_start_sec,audio_end_sec,prompt,keep_template_outfit,created_at";
-// `reels` has no per-template outfit mode column — keep its select separate.
-const REELS_SELECT =
   "id,image_url,image_urls,title,hashtags,song,audio_url,audio_start_sec,audio_end_sec,prompt,created_at";
 const FEED_PAGE_SIZE = 120;
 
@@ -147,7 +144,7 @@ function PhotoshopFeed() {
       if (isLocal) {
         const reelsQuery = supabase
           .from("reels")
-          .select(REELS_SELECT)
+          .select(FEED_SELECT)
           .order("created_at", { ascending: false })
           .range(0, FEED_PAGE_SIZE - 1);
 
@@ -253,15 +250,37 @@ function PhotoshopFeed() {
   };
 
   const startCreate = (it: Item) => {
+    // Seed the draft synchronously so the file-picker gesture isn't blocked.
     try {
       sessionStorage.setItem("create:draft", JSON.stringify({
         images: it.images, cover: it.cover, title: it.title, hashtags: it.hashtags,
         prompt: it.prompt ?? null,
-        keepTemplateOutfit: it.keepTemplateOutfit ?? false,
+        keepTemplateOutfit: false,
       }));
     } catch { /* noop */ }
     pendingRef.current = it;
     fileInputRef.current?.click();
+
+    // Enrich with the admin's per-template outfit mode in the background. The
+    // keep_template_outfit column may not exist yet (migration pending), in
+    // which case the query errors and we simply keep the default (false).
+    void (async () => {
+      const { data, error } = await supabase
+        .from("photoshop_items")
+        .select("keep_template_outfit")
+        .eq("id", it.id)
+        .maybeSingle();
+      if (error || !data) return;
+      const keepTemplateOutfit =
+        (data as { keep_template_outfit?: boolean }).keep_template_outfit ?? false;
+      try {
+        const raw = sessionStorage.getItem("create:draft");
+        if (!raw) return;
+        const draft = JSON.parse(raw);
+        draft.keepTemplateOutfit = keepTemplateOutfit;
+        sessionStorage.setItem("create:draft", JSON.stringify(draft));
+      } catch { /* noop */ }
+    })();
   };
 
   const onPickUserPhotos = async (e: React.ChangeEvent<HTMLInputElement>) => {
