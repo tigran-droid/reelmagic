@@ -595,16 +595,12 @@ type PhotoshopItem = {
   prompt: string | null;
 };
 
-/** Default 10-line generic instruction. Used when an item has no custom prompt. */
+/** Default prompt. Outfit behavior is controlled by the user's outfit-mode toggle — do not mention wardrobe here. */
 export const DEFAULT_PHOTOSHOP_PROMPT = [
-  "You will receive multiple images.",
-  "Image 1 is the TEMPLATE scene — keep its composition, framing, pose, lighting, color grading, wardrobe, background and overall style exactly as shown.",
-  "The remaining images are REFERENCE photos of the USER — use them ONLY as the identity source (face, hair, skin tone, distinctive features, approximate body shape).",
-  "Recreate the TEMPLATE scene so that the main subject IS the USER from the reference photos.",
-  "Do NOT keep the template person's face — fully replace it with the user's identity from the reference images.",
-  "Do NOT copy the user's clothing, background, pose or lighting from the reference photos — those come ONLY from the template.",
-  "Preserve the user's exact facial identity and likeness; do not invent a new or generic person.",
-  "Keep the result photorealistic, sharp and consistent with the template's camera and lens.",
+  "Place the user (from Image 2 and Image 3) into the scene from Image 1.",
+  "Keep the template's composition, framing, camera angle, lighting, color grading, background, and body pose exactly as shown.",
+  "The user's face and hair MUST replace the template person's face — preserve the user's exact facial identity, skin tone, and distinctive features.",
+  "Keep the result photorealistic, sharp, and consistent with the template's camera and lens style.",
   "Return exactly ONE final edited image.",
 ].join("\n");
 

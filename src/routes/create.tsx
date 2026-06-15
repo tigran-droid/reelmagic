@@ -150,7 +150,7 @@ function CreatePage() {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [stagedImages, setStagedImages] = useState<string[]>([]);
-  const [myOutfit, setMyOutfit] = useState(false);
+  const [myOutfit, setMyOutfit] = useState(true);
   const [showAuth, setShowAuth] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
