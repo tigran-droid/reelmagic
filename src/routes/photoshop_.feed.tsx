@@ -4,6 +4,7 @@ import { MobileFrame } from "@/components/MobileFrame";
 import { Heart, MessageCircle, Send, Bookmark, Sparkles, ArrowLeft } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/lib/auth-context";
 
 type Item = {
   id: string;
@@ -17,6 +18,7 @@ type Item = {
   audioEnd: number | null;
   prompt?: string | null;
   keepTemplateOutfit?: boolean;
+  source: "reel" | "photoshop";
 };
 
 type FeedItemRow = {
@@ -38,9 +40,10 @@ const FEED_SELECT =
   "id,image_url,image_urls,title,hashtags,song,audio_url,audio_start_sec,audio_end_sec,prompt,created_at";
 const FEED_PAGE_SIZE = 120;
 
-function mapRow(r: FeedItemRow): Item {
+function mapRow(r: FeedItemRow, source: "reel" | "photoshop"): Item {
   const imgs = r.image_urls && r.image_urls.length > 0 ? r.image_urls : [r.image_url];
   return {
+    source,
     id: r.id,
     images: imgs,
     cover: imgs[0],
@@ -118,10 +121,12 @@ export const Route = createFileRoute("/photoshop_/feed")({
 
 function PhotoshopFeed() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { item: targetId, from } = useSearch({ from: "/photoshop_/feed" });
   const isLocal = from === "local";
   const [activeIndex, setActiveIndex] = useState(0);
   const [needsTapIndex, setNeedsTapIndex] = useState<number | null>(null);
+  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const scrollerRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -154,7 +159,10 @@ function PhotoshopFeed() {
 
         const reelRows = (reelsRes.data ?? []) as FeedItemRow[];
         const photoshopRows = (photoshopRes.data ?? []) as FeedItemRow[];
-        return [...reelRows, ...photoshopRows].map(mapRow);
+        return [
+          ...reelRows.map((r) => mapRow(r, "reel")),
+          ...photoshopRows.map((r) => mapRow(r, "photoshop")),
+        ];
       }
 
       // PHOTOSHOP feed (clicked from the Photoshop page): photoshop_items only.
@@ -174,7 +182,7 @@ function PhotoshopFeed() {
         rows.unshift(targetRow);
       }
 
-      return rows.map(mapRow);
+      return rows.map((r) => mapRow(r, "photoshop"));
     },
     staleTime: CACHE_TIME_MS,
     gcTime: CACHE_TIME_MS * 2,
@@ -183,6 +191,41 @@ function PhotoshopFeed() {
 
   const items = q.data ?? [];
   const active = items[activeIndex];
+
+  // Which templates the signed-in user has already saved (for the bookmark
+  // toggle). Falls back to empty if the saved_items table isn't there yet.
+  useEffect(() => {
+    if (!user) { setSavedIds(new Set()); return; }
+    (async () => {
+      const { data, error } = await supabase
+        .from("saved_items")
+        .select("item_id")
+        .eq("user_id", user.id);
+      if (error || !data) return;
+      setSavedIds(new Set(data.map((r) => r.item_id)));
+    })();
+  }, [user]);
+
+  const toggleSave = async (r: Item) => {
+    if (!user) return;
+    const isSaved = savedIds.has(r.id);
+    setSavedIds((prev) => {
+      const next = new Set(prev);
+      if (isSaved) next.delete(r.id); else next.add(r.id);
+      return next;
+    });
+    if (isSaved) {
+      await supabase.from("saved_items").delete().eq("user_id", user.id).eq("item_id", r.id);
+    } else {
+      await supabase.from("saved_items").insert({
+        user_id: user.id,
+        item_id: r.id,
+        source: r.source,
+        title: r.title,
+        image_url: r.cover,
+      });
+    }
+  };
 
   // Jump to target item on first load
   useEffect(() => {
@@ -349,7 +392,12 @@ function PhotoshopFeed() {
               <Action icon={<Heart className="size-7" fill="white" />} label="0" />
               <Action icon={<MessageCircle className="size-7" />} label="0" />
               <Action icon={<Send className="size-7" />} label="Share" />
-              <Action icon={<Bookmark className="size-7" />} label="Save" />
+              <Action
+                icon={<Bookmark className="size-7" fill={savedIds.has(r.id) ? "currentColor" : "none"} />}
+                label={savedIds.has(r.id) ? "Saved" : "Save"}
+                active={savedIds.has(r.id)}
+                onClick={() => toggleSave(r)}
+              />
             </div>
             <div className="absolute bottom-28 left-0 right-0 px-5 space-y-3 text-white">
               <p className="text-[17px] font-semibold leading-tight tracking-tight drop-shadow">{r.title}</p>
@@ -407,9 +455,12 @@ function ReelCard({ reel, eager, visible, active, needsTap, onToggleAudio, child
   );
 }
 
-function Action({ icon, label }: { icon: React.ReactNode; label: string }) {
+function Action({ icon, label, onClick, active }: { icon: React.ReactNode; label: string; onClick?: () => void; active?: boolean }) {
   return (
-    <button className="flex flex-col items-center gap-1 active:scale-95 transition-transform drop-shadow-[0_2px_4px_rgba(0,0,0,0.4)]">
+    <button
+      onClick={onClick ? (e) => { e.stopPropagation(); onClick(); } : undefined}
+      className={`flex flex-col items-center gap-1 active:scale-95 transition-transform drop-shadow-[0_2px_4px_rgba(0,0,0,0.4)] ${active ? "text-amber-400" : ""}`}
+    >
       {icon}
       <span className="text-[11px] font-semibold">{label}</span>
     </button>
