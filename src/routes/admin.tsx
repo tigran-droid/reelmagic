@@ -237,6 +237,13 @@ function UserRow({ user, onGranted }: { user: ProfileRow; onGranted: () => void 
   );
 }
 
+// The keep_template_outfit column may not exist yet (migration pending). When
+// PostgREST can't find it in its schema cache, the write fails — detect that so
+// callers can transparently retry the write without the column.
+function isMissingOutfitColumn(error: { message?: string } | null | undefined) {
+  return !!error?.message && error.message.includes("keep_template_outfit");
+}
+
 function PhotoRow({
   it, canMoveUp, canMoveDown, onMoveUp, onMoveDown, onDelete, onChange,
 }: {
@@ -260,10 +267,17 @@ function PhotoRow({
 
   const save = async () => {
     setSaving(true);
-    const { error } = await supabase
+    let { error } = await supabase
       .from("photoshop_items")
       .update({ prompt: draft.trim() || null, keep_template_outfit: keepOutfit })
       .eq("id", it.id);
+    // Fall back gracefully if the outfit column isn't in the DB yet.
+    if (isMissingOutfitColumn(error)) {
+      ({ error } = await supabase
+        .from("photoshop_items")
+        .update({ prompt: draft.trim() || null })
+        .eq("id", it.id));
+    }
     setSaving(false);
     if (error) { alert(error.message); return; }
     setEditing(false);
@@ -918,7 +932,7 @@ function AddItemForm({ section, existingCount, onDone, onCancel }: {
     try {
       const image_urls = await Promise.all(images.map((f) => uploadFile("reel-images", f)));
       const audio_url = audio ? await uploadFile("photoshop-audio", audio) : null;
-      const { error } = await supabase.from("photoshop_items").insert({
+      const base = {
         section_id: section.id,
         title: title.trim(),
         hashtags: parseTags(hashtags),
@@ -930,8 +944,14 @@ function AddItemForm({ section, existingCount, onDone, onCancel }: {
         audio_end_sec: audio ? audioEnd : null,
         position: existingCount,
         prompt: prompt.trim() || null,
-        keep_template_outfit: keepOutfit,
-      });
+      };
+      let { error } = await supabase
+        .from("photoshop_items")
+        .insert({ ...base, keep_template_outfit: keepOutfit });
+      // Fall back gracefully if the outfit column isn't in the DB yet.
+      if (isMissingOutfitColumn(error)) {
+        ({ error } = await supabase.from("photoshop_items").insert(base));
+      }
       if (error) throw error;
       onDone();
     } catch (err: unknown) {
