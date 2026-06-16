@@ -99,9 +99,9 @@ export function MobileFrame({ children, immersive = false }: { children: ReactNo
       </aside>
 
       {/* ── Content ── */}
-      <div className="flex-1 min-h-0 flex flex-col relative max-w-[480px] mx-auto overflow-hidden md:max-w-none md:mx-0 md:overflow-visible">
+      <div className="flex-1 min-h-0 min-w-0 w-full flex flex-col relative max-w-[480px] mx-auto overflow-hidden md:max-w-none md:mx-0 md:overflow-visible">
         <main
-          className={`flex-1 min-h-0 overflow-y-auto no-scrollbar md:min-h-screen`}
+          className={`flex-1 min-h-0 overflow-y-auto overflow-x-hidden no-scrollbar md:min-h-screen`}
         >
           {children}
         </main>
