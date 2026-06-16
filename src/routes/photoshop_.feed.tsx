@@ -476,7 +476,12 @@ function PhotoshopFeed() {
                 onClick={() => toggleSave(r)}
               />
             </div>
-            <div className="absolute bottom-28 left-0 right-0 px-5 space-y-3 text-white">
+            {/* This caption block is full-width and sits above the action rail
+                in the DOM, so without pointer-events-none its transparent area
+                swallows taps meant for the Save/Share buttons underneath it
+                (worse on templates with long titles/many hashtags). Only the
+                real controls inside re-enable pointer events. */}
+            <div className="absolute bottom-28 left-0 right-0 px-5 space-y-3 text-white pointer-events-none">
               <p className="text-[17px] font-semibold leading-tight tracking-tight drop-shadow">{r.title}</p>
               <div className="flex flex-wrap gap-x-2 gap-y-1 text-xs font-medium text-white/85">
                 {r.hashtags.map((h) => (<span key={h}>{h}</span>))}
@@ -485,7 +490,7 @@ function PhotoshopFeed() {
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); startCreate(r); }}
-                  className="inline-flex items-center gap-2 pl-4 pr-5 py-2.5 rounded-2xl bg-white text-black text-sm font-semibold shadow-lg shadow-black/20 active:scale-95 transition-transform"
+                  className="pointer-events-auto inline-flex items-center gap-2 pl-4 pr-5 py-2.5 rounded-2xl bg-white text-black text-sm font-semibold shadow-lg shadow-black/20 active:scale-95 transition-transform"
                 >
                   <Sparkles className="size-4" />
                   Create yours
