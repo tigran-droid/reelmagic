@@ -24,6 +24,7 @@ export type Database = {
           image_data_url: string | null
           status: string
           updated_at: string
+          user_id: string | null
         }
         Insert: {
           completed_at?: string | null
@@ -34,6 +35,7 @@ export type Database = {
           image_data_url?: string | null
           status?: string
           updated_at?: string
+          user_id?: string | null
         }
         Update: {
           completed_at?: string | null
@@ -44,6 +46,7 @@ export type Database = {
           image_data_url?: string | null
           status?: string
           updated_at?: string
+          user_id?: string | null
         }
         Relationships: []
       }
