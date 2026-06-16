@@ -69,7 +69,7 @@
 
 @layer base {
   * { border-color: var(--color-border); }
-  html, body { background-color: var(--color-background); color: var(--color-foreground); font-family: var(--font-sans); }
+  html, body { height: 100%; background-color: var(--color-background); color: var(--color-foreground); font-family: var(--font-sans); }
   .no-scrollbar::-webkit-scrollbar { display: none; }
   .no-scrollbar { scrollbar-width: none; }
 }
