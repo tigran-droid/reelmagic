@@ -17,7 +17,16 @@ export function MobileFrame({ children, immersive = false }: { children: ReactNo
   const [showAuth, setShowAuth] = useState(false);
 
   return (
-    <div className="min-h-dvh bg-background text-foreground md:flex">
+    <div
+      className={`bg-background text-foreground ${
+        immersive
+          ? "min-h-dvh md:flex"
+          // Lock the mobile shell to the viewport height and scroll INSIDE main,
+          // so the body never scrolls. That keeps the browser address bar from
+          // collapsing mid-scroll, which is what made the fixed tab bar jump.
+          : "h-dvh md:h-auto md:min-h-dvh flex flex-col md:flex-row"
+      }`}
+    >
       {/* ── Sidebar (desktop only) ── */}
       <aside className="hidden md:flex w-64 shrink-0 flex-col border-r border-border bg-background sticky top-0 h-screen">
         {/* Logo */}
@@ -89,17 +98,22 @@ export function MobileFrame({ children, immersive = false }: { children: ReactNo
       </aside>
 
       {/* ── Content ── */}
-      <div className="flex-1 flex flex-col relative max-w-[480px] mx-auto overflow-hidden md:max-w-none md:mx-0 md:overflow-visible">
+      <div className="flex-1 min-h-0 flex flex-col relative max-w-[480px] mx-auto overflow-hidden md:max-w-none md:mx-0 md:overflow-visible">
         <main
-          className={`flex-1 ${immersive ? "" : "pb-28 md:pb-0"} overflow-y-auto no-scrollbar md:min-h-screen`}
+          className={`flex-1 min-h-0 overflow-y-auto no-scrollbar md:min-h-screen`}
         >
           {children}
         </main>
 
-        {/* Bottom tab bar (mobile only) */}
+        {/* Bottom tab bar (mobile only). In immersive mode it floats over the
+            full-screen feed (fixed overlay). Everywhere else it's an in-flow
+            flex child pinned at the bottom of the viewport-height shell, so it
+            stays rock-steady while only `main` scrolls. */}
         <nav
-          className={`md:hidden fixed bottom-0 inset-x-0 max-w-[480px] mx-auto h-20 border-t border-border flex items-center justify-around px-2 ${
-            immersive ? "bg-black/80 border-white/5" : "bg-tabbar"
+          className={`md:hidden h-20 border-t flex items-center justify-around px-2 ${
+            immersive
+              ? "fixed bottom-0 inset-x-0 max-w-[480px] mx-auto bg-black/80 border-white/5"
+              : "shrink-0 w-full bg-tabbar border-border"
           }`}
         >
           {tabs.map(({ to, label, icon: Icon }) => {
