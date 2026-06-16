@@ -216,8 +216,9 @@ function PhotoshopFeed() {
 
   const toggleSave = async (r: Item) => {
     if (!user) {
-      showToast("Sign in to save templates", true);
-      navigate({ to: "/account" });
+      // Don't auto-navigate (it would hide this message). Show a persistent
+      // banner so it's obvious that sign-in is what's missing.
+      showToast("You're not signed in — open Account and sign in first, then Save", true);
       return;
     }
     const isSaved = savedIds.has(r.id);
