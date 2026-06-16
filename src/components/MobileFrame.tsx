@@ -21,10 +21,12 @@ export function MobileFrame({ children, immersive = false }: { children: ReactNo
       className={`bg-background text-foreground ${
         immersive
           ? "min-h-dvh md:flex"
-          // Lock the mobile shell to the viewport height and scroll INSIDE main,
-          // so the body never scrolls. That keeps the browser address bar from
-          // collapsing mid-scroll, which is what made the fixed tab bar jump.
-          : "h-dvh md:h-auto md:min-h-dvh flex flex-col md:flex-row"
+          // Pin the mobile shell to the exact visual viewport (fixed inset-0) and
+          // scroll INSIDE main. The body never scrolls, so the browser address bar
+          // can't collapse mid-scroll (what made the tab bar jump), and the shell
+          // can't fall short of the viewport (what left the bar floating mid-page).
+          // On desktop we drop back to normal document flow with the sidebar.
+          : "fixed inset-0 flex flex-col overflow-hidden md:static md:overflow-visible md:min-h-dvh md:flex-row"
       }`}
     >
       {/* ── Sidebar (desktop only) ── */}
