@@ -462,7 +462,7 @@ function PhotoshopFeed() {
             onToggleAudio={() => toggleAudio(i)}
           >
             <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-black/50" />
-            <div className="absolute right-3 bottom-44 flex flex-col items-center gap-4 text-white">
+            <div className="absolute right-3 bottom-24 flex flex-col items-center gap-4 text-white">
               <Action icon={<MessageCircle className="size-7" />} label="0" />
               <Action
                 icon={<Send className="size-7" />}
@@ -481,7 +481,7 @@ function PhotoshopFeed() {
                 swallows taps meant for the Save/Share buttons underneath it
                 (worse on templates with long titles/many hashtags). Only the
                 real controls inside re-enable pointer events. */}
-            <div className="absolute bottom-28 left-0 right-0 px-5 space-y-3 text-white pointer-events-none">
+            <div className="absolute bottom-10 left-0 right-0 px-5 space-y-3 text-white pointer-events-none">
               <p className="text-[17px] font-semibold leading-tight tracking-tight drop-shadow">{r.title}</p>
               <div className="flex flex-wrap gap-x-2 gap-y-1 text-xs font-medium text-white/85">
                 {r.hashtags.map((h) => (<span key={h}>{h}</span>))}
@@ -589,7 +589,7 @@ function PhotoCarousel({ reel, eager, active }: { reel: Item; eager: boolean; ac
         ))}
       </div>
       {count > 1 && (
-        <div className="absolute bottom-[152px] left-0 right-0 flex justify-center gap-1.5 pointer-events-none z-10">
+        <div className="absolute bottom-[128px] left-0 right-0 flex justify-center gap-1.5 pointer-events-none z-10">
           {reel.images.map((_, i) => (
             <span key={i} className={`h-1.5 rounded-full transition-all ${i === index ? "w-5 bg-white" : "w-1.5 bg-white/50"}`} />
           ))}
