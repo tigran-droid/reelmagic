@@ -209,7 +209,9 @@ function PhotoshopFeed() {
 
   const showToast = (text: string, bad?: boolean) => {
     setToast({ text, bad });
-    window.setTimeout(() => setToast(null), 3500);
+    // Success messages auto-dismiss; errors stay until tapped so the exact
+    // message can be read (and screenshotted) in any environment.
+    if (!bad) window.setTimeout(() => setToast(null), 3000);
   };
 
   const toggleSave = async (r: Item) => {
@@ -395,13 +397,15 @@ function PhotoshopFeed() {
         <ArrowLeft className="size-5" />
       </button>
       {toast && (
-        <div
-          className={`fixed top-4 left-1/2 -translate-x-1/2 z-[60] max-w-[88%] px-4 py-2.5 rounded-xl text-[13px] font-semibold text-white shadow-lg text-center ${
+        <button
+          onClick={() => setToast(null)}
+          className={`fixed top-4 left-1/2 -translate-x-1/2 z-[60] max-w-[88%] px-4 py-2.5 rounded-xl text-[13px] font-semibold text-white shadow-lg text-center break-words ${
             toast.bad ? "bg-red-600" : "bg-black/85"
           }`}
         >
           {toast.text}
-        </div>
+          {toast.bad && <span className="block text-[10px] font-normal opacity-70 mt-0.5">tap to dismiss</span>}
+        </button>
       )}
       {/* On desktop the reel column is centered at a phone width over a black
           backdrop, so the 9:16 media keeps its aspect instead of stretching
