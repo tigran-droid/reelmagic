@@ -1,5 +1,5 @@
 import { Link, useLocation } from "@tanstack/react-router";
-import { ImagePlus, MapPin, Sparkles, Wand2, LogIn, LogOut, User, Coins, UserCircle } from "lucide-react";
+import { ImagePlus, MapPin, Sparkles, Wand2, LogIn, LogOut, User, UserCircle } from "lucide-react";
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth-context";
@@ -90,17 +90,6 @@ export function MobileFrame({ children, immersive = false }: { children: ReactNo
 
       {/* ── Content ── */}
       <div className="flex-1 flex flex-col relative max-w-[480px] mx-auto overflow-hidden md:max-w-none md:mx-0 md:overflow-visible">
-        {/* Floating credits badge — mobile only, only when signed in */}
-        {user && (
-          <Link
-            to="/pricing"
-            className="md:hidden absolute top-3 right-3 z-50 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/70 backdrop-blur-sm border border-white/10 text-white text-xs font-bold shadow-lg"
-          >
-            <Coins className="size-3.5 text-amber-400" />
-            <span className="tabular-nums">{credits}</span>
-          </Link>
-        )}
-
         <main
           className={`flex-1 ${immersive ? "" : "pb-24 md:pb-0"} overflow-y-auto no-scrollbar md:min-h-screen`}
         >
