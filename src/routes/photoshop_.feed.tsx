@@ -127,6 +127,7 @@ function PhotoshopFeed() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [needsTapIndex, setNeedsTapIndex] = useState<number | null>(null);
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
+  const [toast, setToast] = useState<{ text: string; bad?: boolean } | null>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -206,8 +207,17 @@ function PhotoshopFeed() {
     })();
   }, [user]);
 
+  const showToast = (text: string, bad?: boolean) => {
+    setToast({ text, bad });
+    window.setTimeout(() => setToast(null), 3500);
+  };
+
   const toggleSave = async (r: Item) => {
-    if (!user) { navigate({ to: "/account" }); return; }
+    if (!user) {
+      showToast("Sign in to save templates", true);
+      navigate({ to: "/account" });
+      return;
+    }
     const isSaved = savedIds.has(r.id);
     // Optimistic toggle
     setSavedIds((prev) => {
@@ -215,28 +225,31 @@ function PhotoshopFeed() {
       if (isSaved) next.delete(r.id); else next.add(r.id);
       return next;
     });
+    // upsert avoids a duplicate-key error if the row already exists; onConflict
+    // matches the unique(user_id, item_id) constraint.
     const { error } = isSaved
       ? await supabase.from("saved_items").delete().eq("user_id", user.id).eq("item_id", r.id)
-      : await supabase.from("saved_items").insert({
-          user_id: user.id,
-          item_id: r.id,
-          source: r.source,
-          title: r.title,
-          image_url: r.cover,
-        });
+      : await supabase.from("saved_items").upsert(
+          {
+            user_id: user.id,
+            item_id: r.id,
+            source: r.source,
+            title: r.title,
+            image_url: r.cover,
+          },
+          { onConflict: "user_id,item_id" },
+        );
     if (error) {
-      // Revert the optimistic change and surface why it failed.
+      // Revert the optimistic change and surface why it failed — on-screen toast
+      // works inside Lovable's preview iframe where alert() is blocked.
       setSavedIds((prev) => {
         const next = new Set(prev);
         if (isSaved) next.add(r.id); else next.delete(r.id);
         return next;
       });
-      const missingTable = error.message?.includes("saved_items") || error.code === "42P01";
-      alert(
-        missingTable
-          ? "Saving isn't set up yet: the saved_items table is missing in the database. Run the pending migration to enable it."
-          : `Couldn't save: ${error.message}`,
-      );
+      showToast(`Save failed: ${error.message} (code ${error.code ?? "?"})`, true);
+    } else {
+      showToast(isSaved ? "Removed from saved" : "Saved to your account");
     }
   };
 
@@ -381,6 +394,15 @@ function PhotoshopFeed() {
       >
         <ArrowLeft className="size-5" />
       </button>
+      {toast && (
+        <div
+          className={`fixed top-4 left-1/2 -translate-x-1/2 z-[60] max-w-[88%] px-4 py-2.5 rounded-xl text-[13px] font-semibold text-white shadow-lg text-center ${
+            toast.bad ? "bg-red-600" : "bg-black/85"
+          }`}
+        >
+          {toast.text}
+        </div>
+      )}
       {/* On desktop the reel column is centered at a phone width over a black
           backdrop, so the 9:16 media keeps its aspect instead of stretching
           across the full content area. */}
