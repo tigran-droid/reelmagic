@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
 import { MobileFrame } from "@/components/MobileFrame";
-import { Heart, MessageCircle, Send, Bookmark, Sparkles, ArrowLeft } from "lucide-react";
+import { MessageCircle, Send, Bookmark, Sparkles, ArrowLeft } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
@@ -227,21 +227,20 @@ function PhotoshopFeed() {
       if (isSaved) next.delete(r.id); else next.add(r.id);
       return next;
     });
-    // upsert avoids a duplicate-key error if the row already exists; onConflict
-    // matches the unique(user_id, item_id) constraint.
+    // Plain insert (not upsert): upsert compiles to INSERT ... ON CONFLICT DO
+    // UPDATE, which Postgres requires an UPDATE RLS policy for — and saved_items
+    // only has insert/delete/select policies. A duplicate (already saved) is
+    // harmless, so we treat the unique-violation code (23505) as success.
     const { error } = isSaved
       ? await supabase.from("saved_items").delete().eq("user_id", user.id).eq("item_id", r.id)
-      : await supabase.from("saved_items").upsert(
-          {
-            user_id: user.id,
-            item_id: r.id,
-            source: r.source,
-            title: r.title,
-            image_url: r.cover,
-          },
-          { onConflict: "user_id,item_id" },
-        );
-    if (error) {
+      : await supabase.from("saved_items").insert({
+          user_id: user.id,
+          item_id: r.id,
+          source: r.source,
+          title: r.title,
+          image_url: r.cover,
+        });
+    if (error && error.code !== "23505") {
       // Revert the optimistic change and surface why it failed — on-screen toast
       // works inside Lovable's preview iframe where alert() is blocked.
       setSavedIds((prev) => {
@@ -252,6 +251,41 @@ function PhotoshopFeed() {
       showToast(`Save failed: ${error.message} (code ${error.code ?? "?"})`, true);
     } else {
       showToast(isSaved ? "Removed from saved" : "Saved to your account");
+    }
+  };
+
+  // Share a deep link to this exact template. Uses the OS share sheet when
+  // available (mobile — WhatsApp/Instagram/Telegram/etc.), otherwise copies
+  // the link to the clipboard as a fallback (desktop).
+  const shareItem = async (r: Item) => {
+    const url = `${window.location.origin}/photoshop/feed?item=${r.id}`;
+    const shareData = {
+      title: r.title || "ReelSpark template",
+      text: r.title ? `${r.title} — make yours on ReelSpark` : "Make yours on ReelSpark",
+      url,
+    };
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+      } catch (e) {
+        // User dismissed the share sheet — not an error worth surfacing.
+        if ((e as Error)?.name !== "AbortError") {
+          // Some browsers reject share for non-cancel reasons; fall back to copy.
+          try {
+            await navigator.clipboard.writeText(url);
+            showToast("Link copied — paste it anywhere to share");
+          } catch {
+            showToast("Couldn't share this template", true);
+          }
+        }
+      }
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      showToast("Link copied — paste it anywhere to share");
+    } catch {
+      showToast("Couldn't copy the link", true);
     }
   };
 
@@ -428,9 +462,12 @@ function PhotoshopFeed() {
           >
             <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-black/50" />
             <div className="absolute right-3 bottom-44 flex flex-col items-center gap-4 text-white">
-              <Action icon={<Heart className="size-7" fill="white" />} label="0" />
               <Action icon={<MessageCircle className="size-7" />} label="0" />
-              <Action icon={<Send className="size-7" />} label="Share" />
+              <Action
+                icon={<Send className="size-7" />}
+                label="Share"
+                onClick={() => shareItem(r)}
+              />
               <Action
                 icon={<Bookmark className="size-7" fill={savedIds.has(r.id) ? "currentColor" : "none"} />}
                 label={savedIds.has(r.id) ? "Saved" : "Save"}
