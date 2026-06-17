@@ -57,6 +57,14 @@ type ChatMessage =
   | { id: string; role: "assistant"; kind: "result"; imageDataUrl: string }
   | { id: string; role: "assistant"; kind: "error"; text: string };
 
+type ChatSessionRow = {
+  id: string;
+  title: string;
+  template_url: string | null;
+  messages: ChatMessage[];
+  updated_at: string;
+};
+
 function dataUrlToBlob(dataUrl: string): Blob {
   const [header, data] = dataUrl.split(",");
   const mime = header.match(/:(.*?);/)?.[1] ?? "image/jpeg";
@@ -142,6 +150,18 @@ function wait(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
+function relativeTime(iso: string) {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(iso).toLocaleDateString();
+}
+
 function CreatePage() {
   const navigate = useNavigate();
   const { user, credits, deductCredits } = useAuth();
@@ -153,10 +173,16 @@ function CreatePage() {
   const [stagedImages, setStagedImages] = useState<string[]>([]);
   const [showAuth, setShowAuth] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [history, setHistory] = useState<ChatSessionRow[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const moreInputRef = useRef<HTMLInputElement>(null);
   const didAutoRun = useRef(false);
   const generationTokenRef = useRef(0);
+  // Id of the chat_sessions row backing the current conversation (null until the
+  // first result is saved). Lets us update the same row instead of duplicating.
+  const sessionIdRef = useRef<string | null>(null);
 
   const canAfford = credits >= PHOTO_COST;
 
@@ -294,16 +320,20 @@ function CreatePage() {
       // If the user stopped this generation, discard the result silently.
       if (generationTokenRef.current !== token) return;
 
-      setMessages((m) =>
-        m
+      let nextMessages: ChatMessage[] = [];
+      setMessages((m) => {
+        nextMessages = m
           .filter((x) => x.id !== statusId)
           .concat({
             id: uid(),
             role: "assistant",
             kind: "result",
             imageDataUrl,
-          }),
-      );
+          });
+        return nextMessages;
+      });
+      // Save the chat to History (fire-and-forget).
+      void persistSession(nextMessages);
       // Charge credits for the successful generation
       void deductCredits(PHOTO_COST);
 
@@ -382,6 +412,74 @@ function CreatePage() {
     setMessages((m) => m.filter((x) => !(x.role === "assistant" && x.kind === "status")));
   };
 
+  // Persist the conversation to chat_sessions so it shows up in History. Insert
+  // on the first save, update the same row afterwards. Non-critical: if the
+  // table isn't there yet (migration pending) we just skip silently.
+  const persistSession = async (msgs: ChatMessage[]) => {
+    if (!user || !reel) return;
+    const payload = {
+      user_id: user.id,
+      title: reel.title || "New chat",
+      template_url: reel.cover ?? reel.images?.[0] ?? null,
+      messages: msgs as unknown as never,
+      updated_at: new Date().toISOString(),
+    };
+    try {
+      if (sessionIdRef.current) {
+        await supabase.from("chat_sessions").update(payload).eq("id", sessionIdRef.current);
+      } else {
+        const { data, error } = await supabase
+          .from("chat_sessions")
+          .insert(payload)
+          .select("id")
+          .maybeSingle();
+        if (!error && data) sessionIdRef.current = data.id;
+      }
+    } catch { /* history is non-critical */ }
+  };
+
+  const openHistory = async () => {
+    setShowHistory(true);
+    if (!user) return;
+    setLoadingHistory(true);
+    const { data, error } = await supabase
+      .from("chat_sessions")
+      .select("id, title, template_url, messages, updated_at")
+      .eq("user_id", user.id)
+      .order("updated_at", { ascending: false })
+      .limit(10);
+    setHistory(error || !data ? [] : (data as unknown as ChatSessionRow[]));
+    setLoadingHistory(false);
+  };
+
+  // Reopen a previous chat: restore its template + transcript and keep editing
+  // the same chat_sessions row.
+  const openSession = (s: ChatSessionRow) => {
+    const msgs = Array.isArray(s.messages) ? s.messages : [];
+    sessionIdRef.current = s.id;
+    didAutoRun.current = true;
+    setReel({
+      images: s.template_url ? [s.template_url] : [],
+      cover: s.template_url ?? "",
+      title: s.title,
+      hashtags: [],
+      prompt: null,
+    });
+    setMessages(msgs);
+    const lastImgs = [...msgs].reverse().find(
+      (m): m is Extract<ChatMessage, { kind: "images" }> => m.role === "user" && m.kind === "images",
+    );
+    setUserImages(lastImgs ? lastImgs.images : []);
+    setStagedImages([]);
+    setShowHistory(false);
+  };
+
+  // New chat: pick a fresh template from the browse page.
+  const startNewChat = () => {
+    sessionIdRef.current = null;
+    navigate({ to: "/photoshop" });
+  };
+
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -453,6 +551,66 @@ function CreatePage() {
         />
       )}
 
+      {/* History slide-over */}
+      {showHistory && (
+        <div className="fixed inset-0 z-[70] flex">
+          <button
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => setShowHistory(false)}
+            aria-label="Close history"
+          />
+          <div className="relative ml-auto h-full w-[82%] max-w-[360px] bg-[#161618] border-l border-white/10 flex flex-col shadow-2xl">
+            <div className="flex items-center justify-between px-4 py-3.5 border-b border-white/10">
+              <h2 className="text-[15px] font-bold">History</h2>
+              <button
+                onClick={() => setShowHistory(false)}
+                className="size-8 grid place-items-center rounded-lg text-white/60 active:bg-white/10"
+                aria-label="Close"
+              >
+                <X className="size-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto no-scrollbar p-3">
+              {!user ? (
+                <p className="text-center text-sm text-white/40 mt-10 px-6">
+                  Sign in to see your chat history.
+                </p>
+              ) : loadingHistory ? (
+                <div className="grid place-items-center mt-16">
+                  <Loader2 className="size-5 animate-spin text-white/40" />
+                </div>
+              ) : history.length === 0 ? (
+                <p className="text-center text-sm text-white/40 mt-10 px-6">
+                  No chats yet. Your past creations will appear here.
+                </p>
+              ) : (
+                <div className="space-y-1.5">
+                  {history.map((s) => (
+                    <button
+                      key={s.id}
+                      onClick={() => openSession(s)}
+                      className={`w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-left active:bg-white/10 transition-colors ${
+                        s.id === sessionIdRef.current ? "bg-white/10" : "hover:bg-white/5"
+                      }`}
+                    >
+                      <div className="size-11 rounded-lg overflow-hidden bg-white/10 shrink-0">
+                        {s.template_url && (
+                          <img src={s.template_url} alt="" className="w-full h-full object-cover" loading="lazy" />
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[14px] font-semibold truncate">{s.title || "New chat"}</div>
+                        <div className="text-[11px] text-white/40">{relativeTime(s.updated_at)}</div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <header className="flex items-center justify-between px-4 pt-3 pb-1 border-b border-white/5">
         <button
@@ -466,6 +624,7 @@ function CreatePage() {
         <div className="flex items-center gap-3">
           <button
             type="button"
+            onClick={startNewChat}
             className="size-9 grid place-items-center rounded-xl text-white/70 active:bg-white/10"
             aria-label="New chat"
           >
@@ -473,6 +632,7 @@ function CreatePage() {
           </button>
           <button
             type="button"
+            onClick={openHistory}
             className="relative size-9 grid place-items-center rounded-xl text-white/70 active:bg-white/10"
             aria-label="History"
           >
