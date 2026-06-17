@@ -93,7 +93,7 @@ function TrendCard({ tile, onClick }: { tile: Tile; onClick: () => void }) {
   return (
     <button onClick={onClick} className="mb-1.5 md:mb-3 break-inside-avoid w-full text-left active:scale-[0.97] transition-transform">
       {/* Image */}
-      <div className="relative w-full rounded-lg overflow-hidden bg-gray-200 aspect-[9/16] shadow-sm">
+      <div className="relative w-full rounded-md overflow-hidden bg-gray-200 aspect-[9/16]">
         {tile.cover ? (
           <img
             src={tile.cover}
@@ -114,13 +114,13 @@ function TrendCard({ tile, onClick }: { tile: Tile; onClick: () => void }) {
         </div>
 
         {/* Template icon — top right */}
-        <div className="absolute top-2 right-2 size-6 rounded-lg bg-black/30 backdrop-blur-sm grid place-items-center">
+        <div className="absolute top-2 right-2 size-6 rounded-md bg-black/30 backdrop-blur-sm grid place-items-center">
           <ImageIcon className="size-3 text-white" />
         </div>
       </div>
 
       {/* Title below image — dark text on light bg */}
-      <p className="mt-1.5 px-0.5 text-[13px] font-semibold text-gray-900 leading-tight line-clamp-1">
+      <p className="mt-1 px-0.5 text-[12px] font-semibold text-gray-900 leading-tight line-clamp-1">
         {tile.title}
       </p>
     </button>
