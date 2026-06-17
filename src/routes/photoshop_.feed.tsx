@@ -426,7 +426,7 @@ function PhotoshopFeed() {
       <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={onPickUserPhotos} className="hidden" />
       <button
         onClick={() => window.history.back()}
-        className="fixed top-4 left-4 z-50 size-9 rounded-full bg-black/50 backdrop-blur flex items-center justify-center text-white"
+        className="fixed top-[max(1rem,calc(env(safe-area-inset-top)_+_0.5rem))] left-4 z-50 size-9 rounded-full bg-black/50 backdrop-blur flex items-center justify-center text-white"
         aria-label="Back"
       >
         <ArrowLeft className="size-5" />
@@ -434,7 +434,7 @@ function PhotoshopFeed() {
       {toast && (
         <button
           onClick={() => setToast(null)}
-          className={`fixed top-4 left-1/2 -translate-x-1/2 z-[60] max-w-[88%] px-4 py-2.5 rounded-xl text-[13px] font-semibold text-white shadow-lg text-center break-words ${
+          className={`fixed top-[max(1rem,calc(env(safe-area-inset-top)_+_0.5rem))] left-1/2 -translate-x-1/2 z-[60] max-w-[88%] px-4 py-2.5 rounded-xl text-[13px] font-semibold text-white shadow-lg text-center break-words ${
             toast.bad ? "bg-red-600" : "bg-black/85"
           }`}
         >
@@ -462,7 +462,7 @@ function PhotoshopFeed() {
             onToggleAudio={() => toggleAudio(i)}
           >
             <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-black/50" />
-            <div className="absolute right-3 bottom-40 flex flex-col items-center gap-4 text-white">
+            <div className="absolute right-3 bottom-[calc(10rem_+_env(safe-area-inset-bottom))] flex flex-col items-center gap-4 text-white">
               <Action icon={<MessageCircle className="size-7" />} label="0" />
               <Action
                 icon={<Send className="size-7" />}
@@ -481,7 +481,7 @@ function PhotoshopFeed() {
                 swallows taps meant for the Save/Share buttons underneath it
                 (worse on templates with long titles/many hashtags). Only the
                 real controls inside re-enable pointer events. */}
-            <div className="absolute bottom-24 left-0 right-0 px-5 space-y-3 text-white pointer-events-none">
+            <div className="absolute bottom-[calc(6rem_+_env(safe-area-inset-bottom))] left-0 right-0 px-5 space-y-3 text-white pointer-events-none">
               <p className="text-[17px] font-semibold leading-tight tracking-tight drop-shadow">{r.title}</p>
               <div className="flex flex-wrap gap-x-2 gap-y-1 text-xs font-medium text-white/85">
                 {r.hashtags.map((h) => (<span key={h}>{h}</span>))}
@@ -589,7 +589,7 @@ function PhotoCarousel({ reel, eager, active }: { reel: Item; eager: boolean; ac
         ))}
       </div>
       {count > 1 && (
-        <div className="absolute bottom-[184px] left-0 right-0 flex justify-center gap-1.5 pointer-events-none z-10">
+        <div className="absolute bottom-[calc(184px_+_env(safe-area-inset-bottom))] left-0 right-0 flex justify-center gap-1.5 pointer-events-none z-10">
           {reel.images.map((_, i) => (
             <span key={i} className={`h-1.5 rounded-full transition-all ${i === index ? "w-5 bg-white" : "w-1.5 bg-white/50"}`} />
           ))}

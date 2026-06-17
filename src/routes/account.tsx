@@ -229,7 +229,7 @@ function AccountPage() {
 
   return (
     <MobileFrame>
-      <div className="px-5 pt-8 pb-28 md:pb-8 max-w-[640px] mx-auto w-full">
+      <div className="px-5 pt-[max(2rem,calc(env(safe-area-inset-top)_+_0.5rem))] pb-28 md:pb-8 max-w-[640px] mx-auto w-full">
 
         {/* ── Header: avatar + name + email ── */}
         <div className="flex items-center gap-3.5">

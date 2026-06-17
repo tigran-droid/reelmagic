@@ -612,7 +612,7 @@ function CreatePage() {
       )}
 
       {/* Header */}
-      <header className="flex items-center justify-between px-4 pt-3 pb-1 border-b border-white/5">
+      <header className="flex items-center justify-between px-4 pt-[max(0.75rem,calc(env(safe-area-inset-top)_+_0.5rem))] pb-1 border-b border-white/5">
         <button
           type="button"
           onClick={() => window.history.back()}

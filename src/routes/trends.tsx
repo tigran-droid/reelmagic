@@ -75,7 +75,7 @@ function Trends() {
 
         {/* ── Header ── */}
         <div className="sticky top-0 z-20 bg-[#f5f5f7]/98 backdrop-blur-md border-b border-black/5">
-          <div className="px-4 md:px-5 pt-12 md:pt-5 pb-3 max-w-[1280px] mx-auto w-full">
+          <div className="px-4 md:px-5 pt-[max(3rem,calc(env(safe-area-inset-top)_+_0.5rem))] md:pt-5 pb-3 max-w-[1280px] mx-auto w-full">
             <h1 className="text-2xl font-extrabold tracking-tight text-gray-900">Local</h1>
             <p className="text-[13px] text-gray-400 mt-0.5">Trending AI photo templates</p>
             <div className="flex gap-2 overflow-x-auto no-scrollbar mt-3 -mx-1 px-1">

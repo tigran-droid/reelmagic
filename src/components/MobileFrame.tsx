@@ -111,7 +111,7 @@ export function MobileFrame({ children, immersive = false }: { children: ReactNo
             flex child pinned at the bottom of the viewport-height shell, so it
             stays rock-steady while only `main` scrolls. */}
         <nav
-          className={`md:hidden h-20 border-t flex items-center justify-around px-2 ${
+          className={`md:hidden h-[calc(5rem_+_env(safe-area-inset-bottom))] pb-[env(safe-area-inset-bottom)] border-t flex items-center justify-around px-2 ${
             immersive
               ? "fixed bottom-0 inset-x-0 max-w-[480px] mx-auto bg-black/80 border-white/5"
               : "shrink-0 w-full bg-tabbar border-border"

@@ -94,7 +94,7 @@ function Photoshop() {
 
   return (
     <MobileFrame>
-      <header className="px-5 pt-8 pb-2 flex items-center justify-between">
+      <header className="px-5 pt-[max(2rem,calc(env(safe-area-inset-top)_+_0.5rem))] pb-2 flex items-center justify-between">
         <h1 className="text-2xl font-extrabold tracking-tight">Photoshop</h1>
         <button
           onClick={() => setShowFilter(true)}
