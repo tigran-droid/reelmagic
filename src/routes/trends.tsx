@@ -3,7 +3,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { MobileFrame } from "@/components/MobileFrame";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Wand2, Image as ImageIcon } from "lucide-react";
+import { Image as ImageIcon } from "lucide-react";
 
 // Top filter chips. "For You" shows everything; Girl/Man do a best-effort
 // keyword match on the title + hashtags (templates aren't gender-tagged yet,
@@ -148,12 +148,6 @@ function TrendCard({ tile, onClick }: { tile: Tile; onClick: () => void }) {
             <ImageIcon className="size-8 text-gray-300" />
           </div>
         )}
-
-        {/* Magic Studio watermark — top left */}
-        <div className="absolute top-2 left-2 flex items-center gap-1 bg-black/50 backdrop-blur-sm rounded-full px-2 py-0.5">
-          <Wand2 className="size-2.5 text-white" strokeWidth={2.5} />
-          <span className="text-white text-[9px] font-bold tracking-wide">Magic</span>
-        </div>
 
         {/* Template icon — top right */}
         <div className="absolute top-2 right-2 size-6 rounded-md bg-black/30 backdrop-blur-sm grid place-items-center">
